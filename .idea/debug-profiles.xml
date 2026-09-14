@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="Debug Profiles">
+    <debug-profiles>
+      <debug-profile>
+        <option name="id" value="b97bc151-273c-46dd-9ee0-cf6b97f0a5b8" />
+        <option name="type" value="gdb" />
+        <option name="name" value="gdb-multiarch" />
+        <settings>
+          <option name="executable" value="$PROJECT_DIR$/scripts/gdb.sh" />
+        </settings>
+      </debug-profile>
+    </debug-profiles>
+  </component>
+</project>

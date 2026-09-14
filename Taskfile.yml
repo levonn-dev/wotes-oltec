@@ -1,0 +1,75 @@
+# go-task taskfile (https://taskfile.dev). `task` with no args lists every task; Task wraps CMake.
+# The m68k preset does the configuring, bootstrap fetches tools/, check:host is the CI gate.
+
+version: "3"
+
+tasks:
+
+  default:
+    desc: List available tasks (run with no args)
+    silent: true
+    cmds:
+      - task --list
+
+  # ------------------------------ bootstrap ------------------------------
+
+  bootstrap:
+    desc: Install BlastEm and mdrom into tools/, check the apt tools and the clean ROM
+    cmds:
+      - scripts/bootstrap.sh
+
+  # -------------------------------- build --------------------------------
+
+  configure:
+    desc: 'Configure build/m68k with the m68k preset (extra CMake options after --, e.g. task configure -- -DCLEAN_ROM=path)'
+    status:
+      - '{{if .CLI_ARGS}}false{{else}}test -f build/m68k/build.ninja{{end}}'
+    cmds:
+      - cmake --preset m68k {{.CLI_ARGS}}
+
+  build:
+    desc: 'Build everything: link, 68000 scan, hook check, inject, patch.bps, host helper test'
+    cmds:
+      - task: configure
+      - cmake --build --preset m68k
+
+  run:
+    desc: Run the patched ROM in BlastEm (no debugger)
+    cmds:
+      - task: build
+      - cmake --build --preset m68k --target run
+
+  # -------------------------------- check --------------------------------
+
+  check:
+    desc: 'Full check: build, then the on-target GDB check of poc_init'
+    cmds:
+      - task: build
+      - task: check:target
+
+  check:host:
+    desc: 'Host-only checks, no cross compiler or ROM needed: helper test + shellcheck. The CI gate.'
+    cmds:
+      - scripts/check-rt.sh build/host
+      - shellcheck scripts/*.sh
+
+  check:target:
+    desc: Boot the patched ROM under GDB and check the value poc_init returns
+    cmds:
+      - cmake --build --preset m68k --target check-target
+
+  # -------------------------------- debug --------------------------------
+
+  debug:
+    desc: Interactive gdb-multiarch session against BlastEm, paused at the reset vector
+    interactive: true
+    cmds:
+      - task: build
+      - scripts/gdb.sh build/m68k/patch.elf -ex 'set architecture m68k' -ex 'target remote | scripts/blastem.sh build/m68k/patched.md -D'
+
+  # -------------------------------- clean --------------------------------
+
+  clean:
+    desc: Remove build/ and the Task cache (tools/ stays; delete it to bootstrap again)
+    cmds:
+      - rm -rf build .task

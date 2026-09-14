@@ -1,0 +1,6 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="BlastEm" type="CLion_Remote" version="1" toolchain="" remoteCommand="| scripts/blastem.sh build/m68k/patched.md -D" symbolFile="$PROJECT_DIR$/build/m68k/patch.elf" sysroot="">
+    <debugger kind="GDB" isBundled="true" />
+    <method v="2" />
+  </configuration>
+</component>

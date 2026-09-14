@@ -1,0 +1,10 @@
+# CMake build trees (build/ from the presets, cmake-build-*/ from older IDEA profiles) and the Task cache.
+/build/
+/cmake-build-*/
+/.task/
+
+# Tools fetched by scripts/bootstrap.sh.
+/tools/
+
+# The clean ROM never ships.
+/Dungeons & Dragons - Warriors of the Eternal Sun (USA, Europe).md
