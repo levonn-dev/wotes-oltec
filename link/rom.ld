@@ -4,13 +4,17 @@
 INCLUDE free.ld
 INCLUDE wotes.ld
 
+/* Work RAM the game clears at boot and never touches afterwards. */
+MEMORY
+{
+  RAM_FREE (rw) : ORIGIN = 0xFFAC00, LENGTH = 0x1800
+}
+
 SECTIONS
 {
   .text : { *(.text*) *(.rodata*) } > ROM_FREE
 
-  /* Writable variables need free work RAM, which is not known yet. */
   .data : { *(.data*) } > ROM_FREE
-  .bss (NOLOAD) : { *(.bss*) *(COMMON) } > ROM_FREE
-  ASSERT(SIZEOF(.data) == 0, "RAM placement is not defined yet: no initialised globals")
-  ASSERT(SIZEOF(.bss) == 0, "RAM placement is not defined yet: no globals")
+  .bss (NOLOAD) : { *(.bss*) *(COMMON) } > RAM_FREE
+  ASSERT(SIZEOF(.data) == 0, "no initialised globals: nothing copies .data to RAM")
 }
