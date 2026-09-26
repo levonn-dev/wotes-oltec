@@ -2,6 +2,23 @@
 
 C and 68000 assembly compiled with the m68k-linux-gnu GCC, injected into the clean ROM with [mdrom](https://github.com/levonn-dev/mdrom), and shipped as a BPS patch.
 
+## Goal
+
+A BPS patch that gives Warriors of the Eternal Sun a fourth outdoor region: an Oltec land true to the Hollow World book, entered from the bottom of the Oltec Tradeway dungeon, so the meeting with the Oltec merchant happens in that land instead of at the dungeon's foot. The game's three regions all follow one pattern, so the patch extends the engine's own tables and loaders rather than replacing them.
+
+New code lives in the 2 MB expansion as 68000 assembly and C, reached through six-byte `jsr` hooks; the game tables the patch extends are spliced out of the clean ROM at build time, which is why the build copies it to `build/m68k/clean.md`.
+
+## Status
+
+- [x] Build flow: cross-compiled with GCC, injected into a 2 MB image with mdrom, shipped as a BPS patch, with 68000-instruction and hook checks in the build.
+- [x] Proof of concept: a startup hook that runs C code, and the FIGHTER class renamed to WARRIOR.
+- [x] Reverse engineering: the region loader and its tables, the save format, the dungeon transitions and the world map, named as linker symbols and RAM overlays in `game/`.
+- [x] A fourth region reachable in play: region 4, cloned from the jungle, entered and left through the Tradeway's bottom level, saved and loaded as OLTEC.
+- [x] The region's own identity: an area id, music and an encounter list of its own.
+- [ ] The Oltec land itself: its map, terrain, landmarks and places from the Hollow World book.
+- [ ] The region's own map screen, drawn from the finished land.
+- [ ] The merchant meeting moved into the land, with the medallion and the quest picture it grants restored.
+
 ## Prerequisites
 
 - Ubuntu 24.04, natively or under WSL2 (the emulator window needs WSLg or an X display).

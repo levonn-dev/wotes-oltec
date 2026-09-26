@@ -9,10 +9,15 @@ set(CLEAN_ROM "${CMAKE_SOURCE_DIR}/Dungeons & Dragons - Warriors of the Eternal 
 if(NOT EXISTS "${CLEAN_ROM}")
   message(FATAL_ERROR "Clean ROM not found at ${CLEAN_ROM}; pass -DCLEAN_ROM=<path> (see README.md).")
 endif()
+# src/oltec.s reads original tables and cell arrays out of the clean ROM with .incbin,
+# through this fixed name so that no source file carries the ROM's file name or path.
+file(COPY_FILE "${CLEAN_ROM}" "${CMAKE_BINARY_DIR}/clean.md" ONLY_IF_DIFFERENT)
+# A clean ROM that changes triggers a reconfigure, so the copy is refreshed with it.
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CLEAN_ROM}")
 set(CLEAN_ROM_SHA1 9135f7fda03ef7da92dfade9c0df75808214f693)
 set(ROM_SIZE 2097152) # 2MB: half the cart limit, same as Chili's patch
 # ROM offsets of every .hook_ section in hooks/hooks.s; mdrom fails the inject if one drifts.
-set(HOOKS 000300 0022E1 002316)
+set(HOOKS 000300 0022E1 002316 0008D2 00BB90 0097C6 009D6E 010424 01055C 0D70A8 012F38 012D36 004F8D 00509B 0050DD 012CC5)
 
 include(cmake/mdrom.cmake)
 
@@ -29,6 +34,7 @@ add_executable(patch.elf
   src/poc.c
   src/rt/div.c
   src/rt/mul.s
+  src/oltec.s
   hooks/hooks.s)
 add_dependencies(patch.elf free_ld)
 target_include_directories(patch.elf PRIVATE game)
@@ -45,6 +51,10 @@ target_link_options(patch.elf PRIVATE
 foreach(hook IN LISTS HOOKS)
   target_link_options(patch.elf PRIVATE -Wl,--section-start=.hook_${hook}=0x${hook})
 endforeach()
+# .incbin resolves its file against the assembler's include path; -Xassembler keeps the
+# path one argument, as -Xlinker does above.
+target_compile_options(patch.elf PRIVATE "SHELL:-Xassembler -I -Xassembler \"${CMAKE_BINARY_DIR}\"")
+set_source_files_properties(src/oltec.s PROPERTIES OBJECT_DEPENDS "${CMAKE_BINARY_DIR}/clean.md")
 add_custom_command(TARGET patch.elf POST_BUILD
   COMMAND ${CMAKE_SOURCE_DIR}/scripts/check-68000.sh $<TARGET_FILE:patch.elf>
   COMMAND ${CMAKE_SOURCE_DIR}/scripts/check-hooks.sh $<TARGET_FILE:patch.elf> ${HOOKS}
