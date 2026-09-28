@@ -1,0 +1,9 @@
+test: converted from maps/test.tmj
+base: valley (graphics set 6)
+blocks: 4 of 512
+metatiles: 7 of 3640 (3 from the ROM, 2 project, 1 pasted, 1 solid variants, 0 blank)
+tiles: 7 of 943 (4 base, 2 borrowed, 1 new); VRAM 224 bytes
+  borrowed: swamp tiles 0x1 to 0x2 at VRAM tile 0x4
+  new: 1 from tiles/oltec.png
+place cave: (100, 200) to (100, 200)
+place shrine: (240, 480) to (287, 503)
