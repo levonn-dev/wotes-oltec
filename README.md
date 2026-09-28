@@ -15,6 +15,7 @@ New code lives in the 2 MB expansion as 68000 assembly and C, reached through si
 - [x] Reverse engineering: the region loader and its tables, the save format, the dungeon transitions and the world map, named as linker symbols and RAM overlays in `game/`.
 - [x] A fourth region reachable in play: region 4, cloned from the jungle, entered and left through the Tradeway's bottom level, saved and loaded as OLTEC.
 - [x] The region's own identity: an area id, music and an encounter list of its own.
+- [x] A Tiled toolchain: every outdoor tile set and map extracted into Tiled with its entrances, places, figures and fixed fights, new maps converted into the engine's tables at build time.
 - [ ] The Oltec land itself: its map, terrain, landmarks and places from the Hollow World book.
 - [ ] The region's own map screen, drawn from the finished land.
 - [ ] The merchant meeting moved into the land, with the medallion and the quest picture it grants restored.
@@ -23,6 +24,8 @@ New code lives in the 2 MB expansion as 68000 assembly and C, reached through si
 
 - Ubuntu 24.04, natively or under WSL2 (the emulator window needs WSLg or an X display).
 - [Task](https://taskfile.dev/installation/) 3.
+- Go 1.26 or later, through [goenv](https://github.com/go-nv/goenv) or [go.dev](https://go.dev/dl/); apt's Go is too old. It builds `wotes-tiled`, which turns Tiled maps into the tables the patch links.
+- Optional: [Tiled](https://www.mapeditor.org/) 1.12, fetched into `tools/` by `task tiled:install`, or your own install; see `docs/tiled.md`.
 - The cross compiler, debugger, and helpers:
 
   ```
@@ -41,7 +44,7 @@ cp /path/to/'Dungeons & Dragons - Warriors of the Eternal Sun (USA, Europe).md' 
 task build
 ```
 
-`task bootstrap` downloads the BlastEm nightly and the mdrom release into `tools/`, checks the apt tools, and prints the apt line above if one is missing. It writes nothing outside the repository and never uses sudo. A ROM kept elsewhere is named with `task configure -- -DCLEAN_ROM=<path>`; options after `--` reach CMake even when the tree is already configured.
+`task bootstrap` downloads the BlastEm nightly and the mdrom release into `tools/`, builds `wotes-tiled` there when Go is present, checks the apt tools, and prints the apt line above if one is missing. It writes nothing outside the repository and never uses sudo. A ROM kept elsewhere is named with `task configure -- -DCLEAN_ROM=<path>`; options after `--` reach CMake even when the tree is already configured.
 
 ## Tasks
 
@@ -49,13 +52,18 @@ task build
 
 | Task | Does |
 |---|---|
-| `bootstrap` | BlastEm and mdrom into `tools/`; checks the apt tools and the ROM |
+| `bootstrap` | BlastEm and mdrom into `tools/`, wotes-tiled built there; checks the apt tools and the clean ROM |
 | `build` | Configures `build/m68k/` with the `m68k` preset if needed, then links, runs the 68000 and hook checks, injects, writes `patch.bps`, and runs the host helper test |
 | `run` | The patched ROM in BlastEm |
-| `check` | `build`, then the scripted GDB check of `poc_init` on the target |
-| `check:host` | Helper test plus shellcheck; no cross compiler or ROM needed (what CI runs) |
+| `check` | `build`, the wotes-tiled round trip against the ROM, then the scripted GDB check of `poc_init` on the target |
+| `check:host` | Helper test, wotes-tiled tests, shellcheck; no cross compiler or ROM needed (what CI runs) |
 | `check:target` | The on-target GDB check alone |
 | `debug` | Interactive `gdb-multiarch` against BlastEm, paused at the reset vector |
+| `tiled:extract` | Every outdoor tile set and map of the clean ROM into `maps/rom/` as Tiled files |
+| `tiled:render -- ARGS` | A map or a ROM region to PNG |
+| `tiled:install` | Tiled 1.12 into `tools/tiled/` (optional) |
+| `tiled -- FILE` | Opens a map in that Tiled |
+| `tiled:build`, `tiled:test`, `tiled:roundtrip` | Build, test and round-trip the tool alone |
 | `configure` | The CMake configure alone; extra options after `--` |
 | `clean` | Removes `build/` and the Task cache (keeps `tools/`) |
 
@@ -67,9 +75,11 @@ task build
 
 - `src/`, `hooks/`, `game/`, `link/`: patch code, hook sections, game symbols, linker script
 - `cmake/`: toolchain file and the mdrom lookup
+- `wotes-tiled/`: the Go tool that moves outdoor maps between the ROM and Tiled (`docs/tiled.md`)
+- `maps/`: land maps, metatile definitions, new tiles and the Tiled project file; `maps/rom/` and `maps/gen/` are generated and not committed
 - `scripts/`: bootstrap, the BlastEm launcher, and the build-time checks
 - `tests/`: host-side test of the runtime helpers
-- `docs/`: `debugging.md` for GDB and IDEA
+- `docs/`: `debugging.md` for GDB and IDEA, `tiled.md` for drawing maps
 - `tools/`: created by bootstrap, not committed
 - `.github/`: the CI workflow, which runs `task check:host`, and `CODEOWNERS`
 
