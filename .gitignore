@@ -6,5 +6,11 @@
 # Tools fetched by scripts/bootstrap.sh.
 /tools/
 
+# Tiled files extracted from the ROM or generated from the project's metatile definitions, and Tiled's
+# per-user session beside the project file.
+/maps/rom/
+/maps/gen/
+/maps/*.tiled-session
+
 # The clean ROM never ships.
 /Dungeons & Dragons - Warriors of the Eternal Sun (USA, Europe).md

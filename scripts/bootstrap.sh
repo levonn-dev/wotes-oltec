@@ -1,6 +1,7 @@
 #!/bin/sh
-# Installs the pinned BlastEm nightly and mdrom release into tools/, then checks the apt
-# tools and the clean ROM. Usage: scripts/bootstrap.sh (or: task bootstrap). Never sudo.
+# Installs the pinned BlastEm nightly and mdrom release into tools/, builds wotes-tiled when
+# Go is present, then checks the apt tools and the clean ROM. Usage: scripts/bootstrap.sh
+# (or: task bootstrap). Never sudo.
 set -eu
 
 BLASTEM_VERSION=0.6.3-pre-8013468ed981
@@ -76,6 +77,17 @@ install_mdrom() {
   echo "bootstrap: mdrom installed in tools/mdrom"
 }
 
+build_wotes_tiled() {
+  if command -v go >/dev/null 2>&1 && go version | grep -Eq 'go(1\.(2[6-9]|[3-9][0-9])|[2-9])'; then
+    mkdir -p tools/wotes-tiled
+    (cd wotes-tiled && go build -o ../tools/wotes-tiled/wotes-tiled .) \
+      || { echo "bootstrap: building wotes-tiled failed" >&2; exit 1; }
+    echo "bootstrap: wotes-tiled built into tools/wotes-tiled"
+  else
+    echo "bootstrap: go 1.26 or later is required for wotes-tiled: install it with goenv or from https://go.dev/dl/" >&2
+  fi
+}
+
 check_tools() {
   missing=
   for pair in cmake:cmake ninja:ninja-build gcc:gcc m68k-linux-gnu-gcc:gcc-m68k-linux-gnu \
@@ -101,6 +113,7 @@ check_rom() {
 
 install_blastem
 install_mdrom
+build_wotes_tiled
 check_tools
 check_rom
 echo "bootstrap OK"

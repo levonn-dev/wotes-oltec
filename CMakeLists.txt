@@ -20,6 +20,7 @@ set(ROM_SIZE 2097152) # 2MB: half the cart limit, same as Chili's patch
 set(HOOKS 000300 0022E1 002316 0008D2 00BB90 0097C6 009D6E 010424 01055C 0D70A8 012F38 012D36 004F8D 00509B 0050DD 012CC5)
 
 include(cmake/mdrom.cmake)
+include(cmake/wotes-tiled.cmake)
 
 # mdrom measures the ROM and writes the ROM_FREE memory region the linker script includes.
 add_custom_command(

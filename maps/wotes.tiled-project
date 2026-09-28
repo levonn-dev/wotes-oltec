@@ -1,0 +1,84 @@
+{
+    "automappingRulesFile": "",
+    "commands": [
+        {
+            "arguments": "convert %mapfile --rom build/m68k/clean.md --tilesets-only",
+            "command": "tools/wotes-tiled/wotes-tiled",
+            "enabled": true,
+            "name": "Regenerate metatiles",
+            "saveBeforeExecute": true,
+            "shortcut": null,
+            "showOutput": true,
+            "workingDirectory": "%mappath/.."
+        }
+    ],
+    "compatibilityVersion": 1100,
+    "extensionsPath": "extensions",
+    "folders": [
+        "."
+    ],
+    "properties": [
+    ],
+    "propertyTypes": [
+        {
+            "color": "#ffe04040",
+            "drawFill": true,
+            "id": 5,
+            "members": [
+            ],
+            "name": "Encounter",
+            "type": "class",
+            "useAs": [
+                "object"
+            ]
+        },
+        {
+            "color": "#ff40c040",
+            "drawFill": true,
+            "id": 4,
+            "members": [
+            ],
+            "name": "Npc",
+            "type": "class",
+            "useAs": [
+                "object"
+            ]
+        },
+        {
+            "color": "#ffffa000",
+            "drawFill": true,
+            "id": 1,
+            "members": [
+            ],
+            "name": "Place",
+            "type": "class",
+            "useAs": [
+                "object"
+            ]
+        },
+        {
+            "color": "#ff4080ff",
+            "drawFill": true,
+            "id": 2,
+            "members": [
+            ],
+            "name": "Transition",
+            "type": "class",
+            "useAs": [
+                "object"
+            ]
+        },
+        {
+            "color": "#ffff8000",
+            "drawFill": true,
+            "id": 3,
+            "members": [
+            ],
+            "name": "Trigger",
+            "type": "class",
+            "useAs": [
+                "object"
+            ]
+        }
+    ]
+}

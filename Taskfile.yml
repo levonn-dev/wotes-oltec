@@ -14,7 +14,7 @@ tasks:
   # ------------------------------ bootstrap ------------------------------
 
   bootstrap:
-    desc: Install BlastEm and mdrom into tools/, check the apt tools and the clean ROM
+    desc: Install BlastEm and mdrom into tools/, build wotes-tiled there; check the apt tools and the clean ROM
     cmds:
       - scripts/bootstrap.sh
 
@@ -42,21 +42,77 @@ tasks:
   # -------------------------------- check --------------------------------
 
   check:
-    desc: 'Full check: build, then the on-target GDB check of poc_init'
+    desc: 'Full check: build, the wotes-tiled round trip against the clean ROM, then the on-target GDB check of poc_init'
     cmds:
       - task: build
+      - task: tiled:roundtrip
       - task: check:target
 
   check:host:
-    desc: 'Host-only checks, no cross compiler or ROM needed: helper test + shellcheck. The CI gate.'
+    desc: 'Host-only checks, no cross compiler or ROM needed: helper test, wotes-tiled tests, shellcheck. The CI gate.'
     cmds:
       - scripts/check-rt.sh build/host
+      - task: tiled:test
       - shellcheck scripts/*.sh
 
   check:target:
     desc: Boot the patched ROM under GDB and check the value poc_init returns
     cmds:
       - cmake --build --preset m68k --target check-target
+
+  # -------------------------------- tiled --------------------------------
+
+  tiled:build:
+    desc: Build wotes-tiled into tools/wotes-tiled
+    dir: wotes-tiled
+    cmds:
+      - go build -o ../tools/wotes-tiled/wotes-tiled .
+
+  tiled:test:
+    desc: Vet and test wotes-tiled without the ROM
+    dir: wotes-tiled
+    cmds:
+      - gofmt -l . | { ! grep .; }
+      - go vet ./...
+      - go test ./...
+
+  tiled:roundtrip:
+    desc: Extract every ROM region and convert it back, comparing every tile word (needs the configured build tree)
+    dir: wotes-tiled
+    env:
+      WOTES_CLEAN_ROM: '{{.ROOT_DIR}}/build/m68k/clean.md'
+    cmds:
+      - task: configure
+      - go test -run TestRoundTrip ./internal/convert/
+
+  tiled:extract:
+    desc: Extract every outdoor tile set and map of the clean ROM into maps/rom
+    cmds:
+      - task: configure
+      - task: tiled:build
+      - tools/wotes-tiled/wotes-tiled extract --rom build/m68k/clean.md --out maps
+
+  tiled:render:
+    desc: 'Render a map or a ROM region to PNG, e.g. task tiled:render -- --region valley --out build/valley.png'
+    cmds:
+      # configure would otherwise receive the render arguments as CMake options.
+      - task: configure
+        vars: {CLI_ARGS: ''}
+      - task: tiled:build
+      - tools/wotes-tiled/wotes-tiled render {{.CLI_ARGS}} --rom build/m68k/clean.md
+
+  tiled:install:
+    desc: Fetch the pinned Tiled AppImage into tools/tiled (optional; the build never needs it)
+    cmds:
+      - scripts/install-tiled.sh
+
+  tiled:
+    desc: 'Open the Tiled project, or a map, in the Tiled installed in tools/tiled (task tiled -- maps/rom/valley.tmj)'
+    preconditions:
+      - sh: test -x tools/tiled/squashfs-root/AppRun
+        msg: run task tiled:install first
+    cmds:
+      - tools/tiled/squashfs-root/AppRun {{.CLI_ARGS | default "maps/wotes.tiled-project"}}
 
   # -------------------------------- debug --------------------------------
 
