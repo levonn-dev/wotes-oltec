@@ -12,7 +12,8 @@ MEMORY
 
 SECTIONS
 {
-  .text : { *(.text*) *(.rodata*) } > ROM_FREE
+  .text : { *(.text*) } > ROM_FREE
+  .rodata : { *(.rodata*) } > ROM_FREE
 
   .data : { *(.data*) } > ROM_FREE
   .bss (NOLOAD) : { *(.bss*) *(COMMON) } > RAM_FREE
