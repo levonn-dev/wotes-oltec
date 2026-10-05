@@ -15,18 +15,23 @@ if(WOTES_GO)
   add_custom_target(wotes-tiled DEPENDS "${WOTES_TILED}")
 endif()
 
-# wotes_tiled_map(NAME), called after add_executable(patch.elf ...), assembles maps/NAME.tmj into
-# patch.elf; the depfile names every Tiled file and PNG the map pulls in.
+# wotes_tiled_map(NAME [BUDGET]), called after add_executable(patch.elf ...), assembles maps/NAME.tmj into
+# patch.elf; the depfile names every Tiled file and PNG the map pulls in. BUDGET, when given, caps the
+# map's VRAM tiles (convert's --tile-budget) below whatever else the region keeps in VRAM.
 function(wotes_tiled_map name)
   if(NOT WOTES_GO)
     message(FATAL_ERROR "go 1.26 or later is required to convert maps/${name}.tmj: install it with goenv or from https://go.dev/dl/")
+  endif()
+  set(_budget)
+  if(ARGC GREATER 1)
+    set(_budget --tile-budget ${ARGV1})
   endif()
   set(_out "${CMAKE_BINARY_DIR}/gen/${name}-map.s")
   set(_dep "${CMAKE_BINARY_DIR}/gen/${name}-map.d")
   add_custom_command(
     OUTPUT "${_out}"
     COMMAND "${WOTES_TILED}" convert "maps/${name}.tmj"
-            --rom "${CMAKE_BINARY_DIR}/clean.md" --out "${_out}" --depfile "${_dep}"
+            --rom "${CMAKE_BINARY_DIR}/clean.md" --out "${_out}" --depfile "${_dep}" ${_budget}
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     DEPENDS "${WOTES_TILED}" "${CMAKE_SOURCE_DIR}/maps/${name}.tmj" "${CMAKE_BINARY_DIR}/clean.md"
     DEPFILE "${_dep}"

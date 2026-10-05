@@ -17,7 +17,7 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CLEAN_ROM}")
 set(CLEAN_ROM_SHA1 9135f7fda03ef7da92dfade9c0df75808214f693)
 set(ROM_SIZE 2097152) # 2MB: half the cart limit, same as Chili's patch
 # ROM offsets of every .hook_ section in hooks/hooks.s; mdrom fails the inject if one drifts.
-set(HOOKS 000300 0022E1 002316 0008D2 00BB90 0097C6 009D6E 010424 01055C 0D70A8 012F38 012D36 004F8D 00509B 0050DD 012CC5)
+set(HOOKS 000300 0022E1 002316 0008D2 00BB90 0097C6 009D6E 010424 01055C 0D70A8 012F38 012D36 012CC8 012D00 013132 004F8D 00509B 0050DD 012CC5 00D30C 00E282 00B3A4)
 
 include(cmake/mdrom.cmake)
 include(cmake/wotes-tiled.cmake)
@@ -60,6 +60,10 @@ add_custom_command(TARGET patch.elf POST_BUILD
   COMMAND ${CMAKE_SOURCE_DIR}/scripts/check-68000.sh $<TARGET_FILE:patch.elf>
   COMMAND ${CMAKE_SOURCE_DIR}/scripts/check-hooks.sh $<TARGET_FILE:patch.elf> ${HOOKS}
   VERBATIM)
+
+# The land's tiles stay below 760 (0x2F8): the walking monsters' frames load from tile 0x319, and
+# the valley's lava check at 0x6822 burns the party on tiles 0x2F8 to 0x2FC wherever it stands.
+wotes_tiled_map(oltec 760)
 
 # Host-side check of the division helpers; scripts/check-rt.sh holds the compile line
 # so `task check:host` can run the same test without CMake.
