@@ -16,7 +16,9 @@ New code lives in the 2 MB expansion as 68000 assembly and C, reached through si
 - [x] A fourth region reachable in play: region 4, cloned from the jungle, entered and left through the Tradeway's bottom level, saved and loaded as OLTEC.
 - [x] The region's own identity: an area id, music and an encounter list of its own.
 - [x] A Tiled toolchain: every outdoor tile set and map extracted into Tiled with its entrances, places, figures and fixed fights, new maps converted into the engine's tables at build time.
-- [ ] The Oltec land itself: its map, terrain, landmarks and places from the Hollow World book.
+- [x] Objects on a Tiled land map: entrances, shops, speeches, a restore and figures, converted into tables a region reads.
+- [x] The dungeon levels in Tiled: all 38 extracted top-down with their walls, entry points, items, monsters, events and stairs, and the tool's knowledge of the ROM in a layout file another project can replace.
+- [x] The Oltec land itself: its map, terrain, landmarks and places from the Hollow World book, with its three shops, its shrine, its villagers who speak and pace, and its own colours.
 - [ ] The region's own map screen, drawn from the finished land.
 - [ ] The merchant meeting moved into the land, with the medallion and the quest picture it grants restored.
 
