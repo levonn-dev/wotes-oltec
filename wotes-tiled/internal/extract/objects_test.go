@@ -60,8 +60,8 @@ func checkLayers(t *testing.T, layers []tiled.Layer, firstLayerID, firstObjectID
 }
 
 func TestObjectLayersCity(t *testing.T) {
-	r := romtest.New()
-	layers, next, err := ObjectLayers(r, romtest.City, 5, 1, 10)
+	g := romtest.Game()
+	layers, next, err := ObjectLayers(g, romtest.City, 5, 1, 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +114,7 @@ func TestObjectLayersCity(t *testing.T) {
 	f0 := byName(t, npcs, "Figure 0 at ARMOR SHOP")
 	if f0.Class != ClassNPC || f0.GID != 10 || f0.X != 0xB40-12 || f0.Y != 0x1010-8+FigureHeight || f0.Width != FigureWidth || f0.Height != FigureHeight ||
 		intProp(t, f0, PropFigure) != 0 || intProp(t, f0, PropTile) != 0x3AF || intProp(t, f0, PropX) != 0xB40 || intProp(t, f0, PropY) != 0x1010 ||
-		tiled.StringProp(f0.Properties, PropShows) != "always" || hasProp(f0, PropMoves) || hasProp(f0, PropSlot) {
+		tiled.StringProp(f0.Properties, PropShows) != "always" || hasProp(f0, PropMoves) || hasProp(f0, PropSlot) || hasProp(f0, PropFront) {
 		t.Fatalf("figure 0: %+v", f0)
 	}
 	f3 := byName(t, npcs, "Figure 3")
@@ -126,7 +126,7 @@ func TestObjectLayersCity(t *testing.T) {
 		t.Fatalf("figure 12: %+v", f12)
 	}
 	f1 := byName(t, npcs, "Figure 1")
-	if f1.GID != 11 || tiled.StringProp(f1.Properties, PropShows) != "random" || intProp(t, f1, PropSlot) != 4 {
+	if f1.GID != 11 || tiled.StringProp(f1.Properties, PropShows) != "random" || intProp(t, f1, PropSlot) != 4 || !tiled.BoolProp(f1.Properties, PropFront) {
 		t.Fatalf("figure 1: %+v", f1)
 	}
 	if f5 := byName(t, npcs, "Figure 5"); tiled.StringProp(f5.Properties, PropMoves) != "north-south" {
@@ -150,14 +150,14 @@ func TestObjectLayersCity(t *testing.T) {
 	if spots != 10 || spare != 2 {
 		t.Fatalf("%d spots, %d spare", spots, spare)
 	}
-	if len(encounters.Objects) != 0 {
-		t.Fatalf("the city has no fixed fight: %+v", encounters.Objects)
+	if len(encounters.Objects) != 1 || tiled.StringProp(encounters.Objects[0].Properties, PropKind) != KindSpawn {
+		t.Fatalf("the city has no fixed fight, only its spawn area: %+v", encounters.Objects)
 	}
 }
 
 func TestObjectLayersValley(t *testing.T) {
-	r := romtest.New()
-	layers, next, err := ObjectLayers(r, romtest.Region, 5, 1, 0)
+	g := romtest.Game()
+	layers, next, err := ObjectLayers(g, romtest.Region, 5, 1, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +180,8 @@ func TestObjectLayersValley(t *testing.T) {
 	if len(triggers.Objects) != 0 || len(npcs.Objects) != 0 {
 		t.Fatalf("valley triggers %+v, npcs %+v", triggers.Objects, npcs.Objects)
 	}
-	if len(encounters.Objects) != 4 {
+	// The fight and its three monsters come first, then the three spawn areas.
+	if len(encounters.Objects) != 7 || tiled.StringProp(encounters.Objects[0].Properties, PropKind) != KindEncounter || tiled.StringProp(encounters.Objects[4].Properties, PropKind) != KindSpawn {
 		t.Fatalf("encounters: %+v", encounters.Objects)
 	}
 	fight := byName(t, encounters, "2 TO 3 HAIRY BEASTMAN")
@@ -195,8 +196,8 @@ func TestObjectLayersValley(t *testing.T) {
 }
 
 func TestObjectLayersSwamp(t *testing.T) {
-	r := romtest.New()
-	layers, next, err := ObjectLayers(r, romtest.Other, 5, 1, 0)
+	g := romtest.Game()
+	layers, next, err := ObjectLayers(g, romtest.Other, 5, 1, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -227,7 +228,7 @@ func TestObjectLayersSwamp(t *testing.T) {
 		t.Fatalf("swamp npcs: %+v", npcs.Objects)
 	}
 	fight := byName(t, encounters, "2 LIZARD MAN")
-	if len(encounters.Objects) != 3 || intProp(t, fight, PropFlagClear) != 0xFD || intProp(t, fight, PropFlagSet) != 0xFC {
+	if len(encounters.Objects) != 4 || intProp(t, fight, PropFlagClear) != 0xFD || intProp(t, fight, PropFlagSet) != 0xFC {
 		t.Fatalf("encounters: %+v", encounters.Objects)
 	}
 }
@@ -235,33 +236,40 @@ func TestObjectLayersSwamp(t *testing.T) {
 func TestObjectLayersRejectsOtherRegions(t *testing.T) {
 	reg := romtest.Region
 	reg.Name = "desert"
-	if _, _, err := ObjectLayers(romtest.New(), reg, 5, 1, 0); err == nil {
+	if _, _, err := ObjectLayers(romtest.Game(), reg, 5, 1, 0); err == nil {
 		t.Fatal("a region outside the four did not fail")
 	}
 }
 
 func TestObjectLayersErrors(t *testing.T) {
-	r := romtest.New()
-	r[rom.RegionExitPoints+5] = 0x26
-	if _, _, err := ObjectLayers(r, romtest.Region, 5, 1, 0); err == nil || !strings.Contains(err.Error(), "entrance 0:") || !strings.Contains(err.Error(), "map 0x26") {
+	g := romtest.Game()
+	g.ROM[int(rom.Clean.Entrances.Points)+5] = 0x26
+	if _, _, err := ObjectLayers(g, romtest.Region, 5, 1, 0); err == nil || !strings.Contains(err.Error(), "entrance 0:") || !strings.Contains(err.Error(), "map 0x26") {
 		t.Fatalf("an entrance to an unnamed map: %v", err)
 	}
-	r = romtest.New()
-	r[rom.RegionExitPoints+3*8+5] = rom.FillerMap
-	if _, _, err := ObjectLayers(r, romtest.Other, 5, 1, 0); err == nil || !strings.Contains(err.Error(), "special place 3:") ||
+	g = romtest.Game()
+	g.ROM[int(rom.Clean.Entrances.Points)+3*8+5] = rom.FillerMap
+	if _, _, err := ObjectLayers(g, romtest.Other, 5, 1, 0); err == nil || !strings.Contains(err.Error(), "special place 3:") ||
 		!strings.Contains(err.Error(), "entrance 3 is not in rom_region_exit_points") {
 		t.Fatalf("a zone into a filler entrance: %v", err)
 	}
-	r = romtest.New()
-	r[rom.CityNPCs+8], r[rom.CityNPCs+9], r[rom.CityNPCs+10], r[rom.CityNPCs+11] = 0x00, 0x00, 0x12, 0x34
-	if _, _, err := ObjectLayers(r, romtest.City, 5, 1, 10); err == nil || !strings.Contains(err.Error(), "rom_city_npcs record 0") {
+	g = romtest.Game()
+	g.ROM[int(rom.Clean.Figures.Records)+8], g.ROM[int(rom.Clean.Figures.Records)+9], g.ROM[int(rom.Clean.Figures.Records)+10], g.ROM[int(rom.Clean.Figures.Records)+11] = 0x00, 0x00, 0x12, 0x34
+	if _, _, err := ObjectLayers(g, romtest.City, 5, 1, 10); err == nil || !strings.Contains(err.Error(), "rom_city_npcs record 0") {
 		t.Fatalf("a figure with an unknown routine: %v", err)
+	}
+	l := *romtest.Layout()
+	l.Places.ShopTitles = rom.Addr(len(g.ROM) - 2) // every shop's title long runs past the end
+	g = &rom.Game{ROM: romtest.New(), Layout: &l}
+	if _, _, err := ObjectLayers(g, romtest.City, 5, 1, 10); err == nil || !strings.Contains(err.Error(), "special place") ||
+		!strings.Contains(err.Error(), "rom_shop_titles entry") || !strings.Contains(err.Error(), "runs past the ROM's end") {
+		t.Fatalf("shop titles past the end: %v", err)
 	}
 }
 
 func TestRegionMapsCarryObjects(t *testing.T) {
 	dir := t.TempDir()
-	if err := Run(romtest.New(), romtest.Regions, dir); err != nil {
+	if err := Run(romtest.Game(), dir); err != nil {
 		t.Fatal(err)
 	}
 	city, err := tiled.ReadMap(filepath.Join(dir, "rom", "city.tmj"))
@@ -271,10 +279,11 @@ func TestRegionMapsCarryObjects(t *testing.T) {
 	if len(city.Layers) != 8 || city.Layers[4].Name != LayerTransitions || city.Layers[7].Name != LayerEncounters || city.NextLayerID != 9 {
 		t.Fatalf("city layers: %+v, next layer %d", city.Layers, city.NextLayerID)
 	}
-	if len(city.Tilesets) != 3 || city.Tilesets[2].Source != FiguresName+".tsj" || city.Tilesets[2].FirstGID != 1+3+FlagCount {
+	if len(city.Tilesets) != 4 || city.Tilesets[2].Source != FiguresName+".tsj" || city.Tilesets[2].FirstGID != 1+3+FlagCount ||
+		city.Tilesets[3].Source != SolidName+".tsj" || city.Tilesets[3].FirstGID != 1+3+FlagCount+rom.FigureCount {
 		t.Fatalf("city tilesets: %+v", city.Tilesets)
 	}
-	last := city.Layers[6].Objects[len(city.Layers[6].Objects)-1]
+	last := city.Layers[7].Objects[len(city.Layers[7].Objects)-1]
 	if city.NextObjectID != last.ID+1 || len(city.Layers[3].Objects) != 0 {
 		t.Fatalf("next object id %d after %d; places %+v", city.NextObjectID, last.ID, city.Layers[3].Objects)
 	}
@@ -285,7 +294,7 @@ func TestRegionMapsCarryObjects(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(valley.Tilesets) != 2 || len(valley.Layers) != 8 {
+	if len(valley.Tilesets) != 3 || valley.Tilesets[2].Source != SolidName+".tsj" || len(valley.Layers) != 8 {
 		t.Fatalf("valley: %d tilesets, %d layers", len(valley.Tilesets), len(valley.Layers))
 	}
 }
@@ -317,9 +326,9 @@ func TestNearestTrigger(t *testing.T) {
 }
 
 func TestObjectLayersRefusesOtherPalette(t *testing.T) {
-	r := romtest.New()
-	r[rom.CityNPCs+6], r[rom.CityNPCs+7] = 0x40, 0x00
-	_, _, err := ObjectLayers(r, romtest.City, 5, 1, 10)
+	g := romtest.Game()
+	g.ROM[int(rom.Clean.Figures.Records)+6], g.ROM[int(rom.Clean.Figures.Records)+7] = 0x40, 0x00
+	_, _, err := ObjectLayers(g, romtest.City, 5, 1, 10)
 	if err == nil || !strings.Contains(err.Error(), "record 0") || !strings.Contains(err.Error(), "palette line 2") {
 		t.Fatalf("a figure on another palette line: %v", err)
 	}

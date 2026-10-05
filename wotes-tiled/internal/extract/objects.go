@@ -22,6 +22,7 @@ const (
 	ClassTrigger    = "Trigger"
 	ClassNPC        = "Npc"
 	ClassEncounter  = "Encounter"
+	ClassSpawn      = "Spawn"
 )
 
 // Object kinds, the wotes.kind property.
@@ -64,6 +65,30 @@ const (
 	PropEncounter = "wotes.encounter"
 )
 
+// The vocabulary of a land map's own object layers: the trigger kinds, the shop index, the figures' palette
+// line and the three movements a figure may have.
+const (
+	KindShop          = "shop"
+	KindRestore       = "restore"
+	KindSpeech        = "speech"
+	PropShop          = "wotes.shop"
+	PropFigureColours = "wotes.figure_colours"
+	PropFront         = "wotes.front" // drawn in front of every other sprite
+	MovesStands       = "stands"
+	MovesEastWest     = "east-west"
+	MovesNorthSouth   = "north-south"
+)
+
+// The vocabulary of a map's spawn areas, on its encounters layer: the monsters a random encounter draws from,
+// the frames between two rolls, whether a group is tried on every side, and on an extracted map the game's terrain.
+const (
+	KindSpawn         = "spawn"
+	PropMonsters      = "wotes.monsters"
+	PropPause         = "wotes.pause"
+	PropAllDirections = "wotes.all_directions"
+	PropTerrain       = "wotes.terrain"
+)
+
 // The castle wall's tile-set swap, left, top, right, bottom in party pixels: the city set loads inside
 // wallInner, the valley set outside wallOuter.
 var (
@@ -83,11 +108,11 @@ const (
 // npcNear is how far, in pixels, a figure may stand from a trigger and still be named after it.
 const npcNear = 40
 
-// regionIndex is a region's ram_region value.
-var regionIndex = map[string]int{"city": 0, "valley": 1, "jungle": 2, "swamp": 3}
-
-// hasFigures says whether a region's map draws the castle figures: only the city does.
-func hasFigures(reg rom.Region) bool { idx, ok := regionIndex[reg.Name]; return ok && idx == 0 }
+// hasFigures says whether a region's map draws the castle figures: only ram_region 0, the city, does.
+func hasFigures(l *rom.Layout, reg rom.Region) bool {
+	idx, err := l.RegionIndex(reg.Name)
+	return err == nil && idx == 0
+}
 
 // triggerNames names the actions that are not plain speeches; shops take their titles instead.
 var triggerNames = map[int]string{5: "Duke Barrik", 6: "Marmillian", 7: "Temple", 10: "City gate", 11: "City gate", 12: "Tree of Life", 13: "Well of Souls",
@@ -112,7 +137,7 @@ func triggerRegion(action int) int {
 
 // builder numbers objects across a map's layers.
 type builder struct {
-	r    rom.ROM
+	g    *rom.Game
 	next int
 }
 
@@ -138,13 +163,13 @@ func (b *builder) rect(x0, y0, x1, y1 int, name, class, kind string, props ...ti
 // ObjectLayers builds a region's transitions, triggers, npcs and encounters layers from the ROM's tables,
 // with layer ids from firstLayerID and object ids from firstObjectID. figuresGID is the first GID of the
 // figures tileset, which only the city's map references. It returns the layers and the next object id.
-func ObjectLayers(r rom.ROM, reg rom.Region, firstLayerID, firstObjectID, figuresGID int) ([]tiled.Layer, int, error) {
-	idx, ok := regionIndex[reg.Name]
-	if !ok {
-		return nil, 0, fmt.Errorf("%s is not one of the four outdoor regions", reg.Name)
+func ObjectLayers(g *rom.Game, reg rom.Region, firstLayerID, firstObjectID, figuresGID int) ([]tiled.Layer, int, error) {
+	idx, err := g.Layout.RegionIndex(reg.Name)
+	if err != nil {
+		return nil, 0, err
 	}
-	b := &builder{r: r, next: firstObjectID}
-	places, err := r.Places()
+	b := &builder{g: g, next: firstObjectID}
+	places, err := g.Places()
 	if err != nil {
 		return nil, 0, err
 	}
@@ -157,7 +182,7 @@ func ObjectLayers(r rom.ROM, reg rom.Region, firstLayerID, firstObjectID, figure
 		return nil, 0, err
 	}
 	var npcs []tiled.Object
-	if hasFigures(reg) {
+	if hasFigures(g.Layout, reg) {
 		if npcs, err = b.npcs(triggers, figuresGID); err != nil {
 			return nil, 0, err
 		}
@@ -166,6 +191,11 @@ func ObjectLayers(r rom.ROM, reg rom.Region, firstLayerID, firstObjectID, figure
 	if err != nil {
 		return nil, 0, err
 	}
+	areas, err := b.spawns(idx, reg)
+	if err != nil {
+		return nil, 0, err
+	}
+	encounters = append(encounters, areas...)
 	var layers []tiled.Layer
 	for i, l := range []struct {
 		name    string
@@ -177,7 +207,7 @@ func ObjectLayers(r rom.ROM, reg rom.Region, firstLayerID, firstObjectID, figure
 }
 
 func (b *builder) transitions(idx int, places []rom.Place) ([]tiled.Object, error) {
-	entrances, err := b.r.Entrances()
+	entrances, err := b.g.Entrances()
 	if err != nil {
 		return nil, err
 	}
@@ -186,7 +216,7 @@ func (b *builder) transitions(idx int, places []rom.Place) ([]tiled.Object, erro
 		if e.Region != idx || e.Unreachable {
 			continue
 		}
-		name, err := DungeonName(e.Map)
+		name, err := b.g.Layout.DungeonName(e.Map)
 		if err != nil {
 			return nil, fmt.Errorf("entrance %d: %v", e.Index, err)
 		}
@@ -205,7 +235,7 @@ func (b *builder) transitions(idx int, places []rom.Place) ([]tiled.Object, erro
 		if err != nil {
 			return nil, fmt.Errorf("special place %d: %v", p.Index, err)
 		}
-		name, err := DungeonName(e.Map)
+		name, err := b.g.Layout.DungeonName(e.Map)
 		if err != nil {
 			return nil, fmt.Errorf("special place %d: %v", p.Index, err)
 		}
@@ -236,10 +266,10 @@ func (b *builder) triggers(idx int, places []rom.Place) ([]tiled.Object, error) 
 		if _, zone := zoneEntrance[p.Action]; zone || triggerRegion(p.Action) != idx {
 			continue
 		}
-		speeches := make([][]string, rom.GameLevels)
+		speeches := make([][]string, b.g.Layout.Places.Levels)
 		props := []tiled.Property{tiled.Int(PropIndex, p.Index), tiled.Int(PropAction, p.Action), tiled.Int(PropLevel, p.Level)}
 		for level := range speeches {
-			lines, err := b.r.Speech(level, p.Action)
+			lines, err := b.g.Speech(level, p.Action)
 			if err != nil {
 				return nil, fmt.Errorf("special place %d: %v", p.Index, err)
 			}
@@ -248,11 +278,14 @@ func (b *builder) triggers(idx int, places []rom.Place) ([]tiled.Object, error) 
 				props = append(props, tiled.Str(fmt.Sprintf("%s%d", PropSpeech, level), strings.Join(lines, "\n")))
 			}
 		}
-		name := b.triggerName(p, speeches)
+		name, err := b.triggerName(p, speeches)
+		if err != nil {
+			return nil, fmt.Errorf("special place %d: %v", p.Index, err)
+		}
 		out = append(out, b.rect(p.X0, p.Y0, p.X1, p.Y1, name, ClassTrigger, KindTrigger, props...))
 	}
 	if idx == 0 {
-		stones, err := b.r.Gravestones()
+		stones, err := b.g.Gravestones()
 		if err != nil {
 			return nil, err
 		}
@@ -269,19 +302,19 @@ func (b *builder) triggers(idx int, places []rom.Place) ([]tiled.Object, error) 
 
 // triggerName names a special place: its shop's title, its known role, the first sentence of its
 // lowest-level speech, or its action number.
-func (b *builder) triggerName(p rom.Place, speeches [][]string) string {
+func (b *builder) triggerName(p rom.Place, speeches [][]string) (string, error) {
 	if shop, ok := shopActions[p.Action]; ok {
-		return b.r.ShopTitle(shop)
+		return b.g.ShopTitle(shop)
 	}
 	if name, ok := triggerNames[p.Action]; ok {
-		return name
+		return name, nil
 	}
 	for _, lines := range speeches {
 		if len(lines) != 0 {
-			return firstSentence(lines)
+			return firstSentence(lines), nil
 		}
 	}
-	return fmt.Sprintf("Action %d", p.Action)
+	return fmt.Sprintf("Action %d", p.Action), nil
 }
 
 // firstSentence joins lines with spaces and cuts after the first full stop, exclamation or question mark.
@@ -294,13 +327,13 @@ func firstSentence(lines []string) string {
 }
 
 func (b *builder) npcs(triggers []tiled.Object, figuresGID int) ([]tiled.Object, error) {
-	records, err := b.r.CityNPCs()
+	records, err := b.g.CityNPCs()
 	if err != nil {
 		return nil, err
 	}
 	var out []tiled.Object
 	for _, n := range records {
-		figure, err := rom.Figure(n.Tile)
+		figure, err := b.g.Layout.Figure(n.Tile)
 		if err != nil {
 			return nil, fmt.Errorf("rom_city_npcs record %d: %v", n.Index, err)
 		}
@@ -314,9 +347,12 @@ func (b *builder) npcs(triggers []tiled.Object, figuresGID int) ([]tiled.Object,
 		props := []tiled.Property{tiled.Int(PropIndex, n.Index), tiled.Int(PropFigure, figure), tiled.Int(PropTile, n.Tile), tiled.Int(PropX, n.X), tiled.Int(PropY, n.Y), tiled.Str(PropShows, shows(n))}
 		switch n.Routine {
 		case rom.NPCPacesX:
-			props = append(props, tiled.Str(PropMoves, "east-west"))
+			props = append(props, tiled.Str(PropMoves, MovesEastWest))
 		case rom.NPCPacesY:
-			props = append(props, tiled.Str(PropMoves, "north-south"))
+			props = append(props, tiled.Str(PropMoves, MovesNorthSouth))
+		}
+		if n.Front {
+			props = append(props, tiled.Bool(PropFront, true))
 		}
 		if n.Slot != 0 {
 			props = append(props, tiled.Int(PropSlot, n.Slot))
@@ -327,7 +363,7 @@ func (b *builder) npcs(triggers []tiled.Object, figuresGID int) ([]tiled.Object,
 		o.Width, o.Height = FigureWidth, FigureHeight
 		out = append(out, o)
 	}
-	for _, s := range b.r.TownsfolkSpots() {
+	for _, s := range b.g.TownsfolkSpots() {
 		name, spare := "Townsperson spot", s.Index >= rom.TownsfolkUsed
 		if spare {
 			name += " (spare)"
@@ -370,7 +406,7 @@ func nearestTrigger(triggers []tiled.Object, x, y int) string {
 }
 
 func (b *builder) encounters(idx int) ([]tiled.Object, error) {
-	fights, err := b.r.FixedEncounters()
+	fights, err := b.g.FixedEncounters()
 	if err != nil {
 		return nil, err
 	}
@@ -379,7 +415,7 @@ func (b *builder) encounters(idx int) ([]tiled.Object, error) {
 		if e.Region != idx {
 			continue
 		}
-		monster := b.r.MonsterName(e.Monster)
+		monster := b.g.MonsterName(e.Monster)
 		name := fmt.Sprintf("%d %s", e.Max, monster)
 		if e.Min != e.Max {
 			name = fmt.Sprintf("%d TO %d %s", e.Min, e.Max, monster)

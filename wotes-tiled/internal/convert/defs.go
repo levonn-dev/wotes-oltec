@@ -160,6 +160,6 @@ func (c *converter) tileOf(t TileRef) (rom.Tile, [16]color.NRGBA, error) {
 		if err != nil {
 			return rom.Tile{}, [16]color.NRGBA{}, err
 		}
-		return c.opt.ROM.Tile(reg.TileSource, t.Index), c.pal.Line(t.Pal), nil
+		return c.opt.Game.Tile(int(reg.TileSource), t.Index), c.pal.Line(t.Pal), nil
 	}
 }

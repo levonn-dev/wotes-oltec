@@ -2,14 +2,11 @@ package rom
 
 import "fmt"
 
-// The outdoor dungeon entrances: one ram_region byte per entrance in RegionExits, 0xFF ends, and the
-// parallel 8-byte records in RegionExitPoints: x and y words, then level, map, flag and entry bytes.
-const (
-	RegionExits      = 0x10416
-	RegionExitPoints = 0x104EC
-	EntranceLimit    = 40   // records the tables hold at most
-	FillerMap        = 0x3F // the map number of a filler record
-)
+// FillerMap is the map number of a filler entrance record.
+const FillerMap = 0x3F
+
+// entranceRecord is the bytes of one rom_region_exit_points record.
+const entranceRecord = 8
 
 // Entrance is one outdoor position that opens a dungeon map.
 type Entrance struct {
@@ -23,18 +20,25 @@ type Entrance struct {
 }
 
 // Entrances reads the entrance tables, leaving fillers out.
-func (r ROM) Entrances() ([]Entrance, error) {
+func (g *Game) Entrances() ([]Entrance, error) {
+	exits, points, limit := int(g.Layout.Entrances.Regions), int(g.Layout.Entrances.Points), g.Layout.Entrances.Count
 	var out []Entrance
 	for i := 0; ; i++ {
-		if i > EntranceLimit {
-			return nil, fmt.Errorf("rom_region_exits has no 0xFF end within %d records", EntranceLimit)
+		if i > limit {
+			return nil, fmt.Errorf("rom_region_exits has no 0xFF end within %d records", limit)
 		}
-		region := int(r[RegionExits+i])
+		if exits+i >= len(g.ROM) {
+			return nil, fmt.Errorf("rom_region_exits record %d runs past the ROM's end", i)
+		}
+		region := int(g.ROM[exits+i])
 		if region == 0xFF {
 			return out, nil
 		}
-		p := RegionExitPoints + 8*i
-		e := Entrance{Index: i, Region: region, X: int(r.U16(p)), Y: int(r.U16(p + 2)), Level: int(r[p+4]), Map: int(r[p+5]), Flag: int(r[p+6]), Entry: int(r[p+7])}
+		p := points + entranceRecord*i
+		if p+entranceRecord > len(g.ROM) {
+			return nil, fmt.Errorf("rom_region_exit_points record %d runs past the ROM's end", i)
+		}
+		e := Entrance{Index: i, Region: region, X: int(g.U16(p)), Y: int(g.U16(p + 2)), Level: int(g.ROM[p+4]), Map: int(g.ROM[p+5]), Flag: int(g.ROM[p+6]), Entry: int(g.ROM[p+7])}
 		if e.Map == FillerMap {
 			continue
 		}
@@ -46,4 +50,23 @@ func (r ROM) Entrances() ([]Entrance, error) {
 		}
 		out = append(out, e)
 	}
+}
+
+// EntranceAt reads record i of the entrance tables, fillers included, so a caller can tell a record a
+// patch may take over (Map == FillerMap) from one another region owns.
+func (g *Game) EntranceAt(i int) (Entrance, error) {
+	exits, points, count := int(g.Layout.Entrances.Regions), int(g.Layout.Entrances.Points), g.Layout.Entrances.Count
+	if i < 0 || i >= count {
+		return Entrance{}, fmt.Errorf("entrance %d is outside the %d records of rom_region_exit_points", i, count)
+	}
+	p := points + entranceRecord*i
+	if exits+i >= len(g.ROM) || p+entranceRecord > len(g.ROM) {
+		return Entrance{}, fmt.Errorf("rom_region_exit_points record %d runs past the ROM's end", i)
+	}
+	for k := 0; k <= i; k++ {
+		if g.ROM[exits+k] == 0xFF {
+			return Entrance{}, fmt.Errorf("entrance %d is past the end of rom_region_exits, which holds %d records", i, k)
+		}
+	}
+	return Entrance{Index: i, Region: int(g.ROM[exits+i]), X: int(g.U16(p)), Y: int(g.U16(p + 2)), Level: int(g.ROM[p+4]), Map: int(g.ROM[p+5]), Flag: int(g.ROM[p+6]), Entry: int(g.ROM[p+7])}, nil
 }

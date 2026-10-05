@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/levonn-dev/wotes-oltec/wotes-tiled/internal/rom"
 	"github.com/levonn-dev/wotes-oltec/wotes-tiled/internal/scaffold"
 )
 
@@ -16,13 +15,18 @@ func runNew(args []string) error {
 	fs.SetOutput(io.Discard)
 	base := fs.String("base", "", "the ROM region the map builds on: city, valley, jungle or swamp")
 	dir := fs.String("dir", "maps", "the maps folder")
+	layout := fs.String("layout", "", "a layout file replacing the built-in clean ROM layout")
 	if err := fs.Parse(rest); err != nil {
 		return err
 	}
 	if name == "" || *base == "" {
-		return fmt.Errorf("new: usage: new NAME --base REGION [--dir DIR]")
+		return fmt.Errorf("new: usage: new NAME --base REGION [--dir DIR] [--layout FILE]")
 	}
-	reg, err := rom.Find(*base)
+	l, err := loadLayout(*layout)
+	if err != nil {
+		return err
+	}
+	reg, err := l.Region(*base)
 	if err != nil {
 		return err
 	}

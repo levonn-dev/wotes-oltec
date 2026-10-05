@@ -22,17 +22,22 @@ func runConvert(args []string) error {
 	depfile := fs.String("depfile", "", "write a Ninja depfile naming every file read")
 	tilesetsOnly := fs.Bool("tilesets-only", false, "regenerate the project tileset and stop")
 	budget := fs.Int("tile-budget", convert.DefaultBudget, "the VRAM tile budget")
+	layout := fs.String("layout", "", "a layout file replacing the built-in clean ROM layout")
 	if err := fs.Parse(rest); err != nil {
 		return err
 	}
 	if mapPath == "" || *romPath == "" || (*out == "" && !*tilesetsOnly) {
-		return fmt.Errorf("convert: usage: convert MAP --rom PATH --out FILE [--depfile FILE] [--tilesets-only] [--tile-budget N]")
+		return fmt.Errorf("convert: usage: convert MAP --rom PATH --out FILE [--depfile FILE] [--tilesets-only] [--tile-budget N] [--layout FILE]")
 	}
-	r, err := rom.Load(*romPath)
+	l, err := loadLayout(*layout)
 	if err != nil {
 		return err
 	}
-	res, err := convert.Convert(convert.Options{ROM: r, MapPath: mapPath, TileBudget: *budget, TilesetsOnly: *tilesetsOnly})
+	g, err := rom.Load(*romPath, l)
+	if err != nil {
+		return err
+	}
+	res, err := convert.Convert(convert.Options{Game: g, MapPath: mapPath, TileBudget: *budget, TilesetsOnly: *tilesetsOnly})
 	if err != nil {
 		return err
 	}

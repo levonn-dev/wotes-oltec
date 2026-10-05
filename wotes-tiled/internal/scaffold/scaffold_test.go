@@ -14,8 +14,8 @@ import (
 
 func TestNew(t *testing.T) {
 	dir := t.TempDir()
-	r := romtest.New()
-	if err := extract.Run(r, romtest.Regions, dir); err != nil {
+	g := romtest.Game()
+	if err := extract.Run(g, dir); err != nil {
 		t.Fatal(err)
 	}
 	if err := New(dir, "probe", romtest.Region); err != nil {
@@ -30,8 +30,8 @@ func TestNew(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The synthetic valley has 3 metatiles: flags start at 4 (two tiles), the project tileset at 6, last.
-	if len(m.Tilesets) != 3 || m.Tilesets[1].FirstGID != 4 || m.Tilesets[2].FirstGID != 6 || m.Tilesets[2].Source != "gen/probe-metatiles.tsj" || tiled.StringProp(m.Properties, extract.PropBase) != "valley" {
+	// The synthetic valley has 3 metatiles: flags start at 4 (two tiles), the figures at 6 (thirteen), the project tileset at 19, last.
+	if len(m.Tilesets) != 4 || m.Tilesets[1].FirstGID != 4 || m.Tilesets[2].FirstGID != 6 || m.Tilesets[2].Source != "rom/city-figures.tsj" || m.Tilesets[3].FirstGID != 19 || m.Tilesets[3].Source != "gen/probe-metatiles.tsj" || tiled.StringProp(m.Properties, extract.PropBase) != "valley" {
 		t.Fatalf("tilesets %+v", m.Tilesets)
 	}
 	if m.Tilesets[0].FirstGID != 1 || m.Tilesets[0].Source != "rom/valley-metatiles.tsj" {
@@ -41,8 +41,16 @@ func TestNew(t *testing.T) {
 	for _, l := range m.Layers {
 		layers = append(layers, l.Name)
 	}
-	if strings.Join(layers, " ") != "ground front solid places" {
+	if strings.Join(layers, " ") != "ground front solid places transitions triggers npcs encounters" {
 		t.Fatalf("layers %v", layers)
+	}
+	for i, l := range m.Layers[4:] {
+		if l.Type != "objectgroup" || len(l.Objects) != 0 || l.DrawOrder != "topdown" || l.ID != 5+i || !l.Visible || l.Opacity != 1 {
+			t.Fatalf("object layer %+v", l)
+		}
+	}
+	if m.NextLayerID != 9 {
+		t.Fatalf("next layer id %d", m.NextLayerID)
 	}
 	ts, err := tiled.ReadTileset(filepath.Join(dir, "gen/probe-metatiles.tsj"))
 	if err != nil {
@@ -52,11 +60,11 @@ func TestNew(t *testing.T) {
 		t.Fatalf("project tileset kind %q, definitions %q", kind, defs)
 	}
 	// A fresh map has an empty ground, which convert must refuse at its first cell; the tilesets-only pass succeeds.
-	_, err = convert.Convert(convert.Options{ROM: r, Regions: romtest.Regions, MapPath: filepath.Join(dir, "probe.tmj")})
+	_, err = convert.Convert(convert.Options{Game: g, MapPath: filepath.Join(dir, "probe.tmj")})
 	if err == nil || !strings.Contains(err.Error(), "(x 0, y 0): empty ground cell") {
 		t.Fatalf("a fresh map must fail on its empty ground, got %v", err)
 	}
-	if _, err := convert.Convert(convert.Options{ROM: r, Regions: romtest.Regions, MapPath: filepath.Join(dir, "probe.tmj"), TilesetsOnly: true}); err != nil {
+	if _, err := convert.Convert(convert.Options{Game: g, MapPath: filepath.Join(dir, "probe.tmj"), TilesetsOnly: true}); err != nil {
 		t.Fatalf("tilesets-only on a fresh map: %v", err)
 	}
 	if err := New(dir, "probe", romtest.Region); err == nil || !strings.Contains(err.Error(), "exists") {

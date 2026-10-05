@@ -97,7 +97,7 @@ type TilesetRef struct {
 	Source   string `json:"source"`
 }
 
-// Layer is a tile layer or an object group.
+// Layer is a tile layer, an object group or an image layer.
 type Layer struct {
 	Type       string          `json:"type"`
 	ID         int             `json:"id"`
@@ -113,6 +113,9 @@ type Layer struct {
 	DrawOrder  string          `json:"draworder,omitempty"`
 	Objects    []Object        `json:"objects,omitempty"`
 	Properties []Property      `json:"properties,omitempty"`
+	Image      string          `json:"image,omitempty"`   // an image layer's picture
+	OffsetX    float64         `json:"offsetx,omitempty"` // an image layer's place, in pixels from the map's origin
+	OffsetY    float64         `json:"offsety,omitempty"`
 }
 
 // SetData stores a tile layer's GIDs.

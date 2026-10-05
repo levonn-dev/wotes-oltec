@@ -2,6 +2,7 @@
 package emit
 
 import (
+	"encoding/binary"
 	"fmt"
 	"strings"
 
@@ -19,6 +20,21 @@ func Assembler(res *convert.Result, source string) string {
 	globals := []string{n + "_front", n + "_ground", n + "_blocks", n + "_metatiles", n + "_tiles"}
 	for _, p := range res.Places {
 		globals = append(globals, n+"_place_"+p.Name)
+	}
+	if len(res.Triggers) > 0 {
+		globals = append(globals, n+"_triggers")
+	}
+	if len(res.Texts) > 0 {
+		globals = append(globals, n+"_texts")
+	}
+	if len(res.Figures) > 0 {
+		globals = append(globals, n+"_figures")
+	}
+	if len(res.FigureColours) > 0 {
+		globals = append(globals, n+"_figure_colours")
+	}
+	if len(res.Spawns) > 0 {
+		globals = append(globals, n+"_spawns", n+"_spawn_grid")
 	}
 	fmt.Fprintf(&sb, "    .globl  %s\n", strings.Join(globals, ", "))
 	fmt.Fprintf(&sb, "\n%s_front:\n", n)
@@ -62,6 +78,7 @@ func Assembler(res *convert.Result, source string) string {
 	for _, p := range res.Places {
 		fmt.Fprintf(&sb, "%s_place_%s:\n    .short  %d, %d, %d, %d\n", n, p.Name, p.X0, p.Y0, p.X1, p.Y1)
 	}
+	objects(&sb, res)
 	sb.WriteString("\n    .section .note.GNU-stack,\"\",%progbits\n")
 	return sb.String()
 }
@@ -87,4 +104,105 @@ func tileBytes(sb *strings.Builder, t rom.Tile) {
 		}
 		fmt.Fprintf(sb, "    .byte   %s\n", strings.Join(parts, ", "))
 	}
+}
+
+// objects writes the tables of the map's object layers: the trigger records, the texts they show, the
+// figure records, the figures' palette line, the spawn areas and the entrance symbols.
+func objects(sb *strings.Builder, res *convert.Result) {
+	n := res.Name
+	if len(res.Triggers) > 0 {
+		fmt.Fprintf(sb, "\n%s_triggers:\n", n)
+		for _, t := range res.Triggers {
+			fmt.Fprintf(sb, "    .short  0x%04X, 0x%04X, 0x%04X, 0x%04X | %s\n    .byte   %d, %d\n", t.Y0, t.Y1, t.X0, t.X1, t.Name, t.Level, t.Kind)
+			if t.Kind == convert.TriggerShop {
+				fmt.Fprintf(sb, "    .long   %d\n", t.Shop)
+			} else {
+				fmt.Fprintf(sb, "    .long   %s_text_%d\n", n, t.Text)
+			}
+		}
+		sb.WriteString("    .short  0xFFFF\n")
+	}
+	if len(res.Texts) > 0 {
+		fmt.Fprintf(sb, "\n%s_texts:\n", n)
+		for i, lines := range res.Texts {
+			enc := rom.EncodeMessage(lines)
+			fmt.Fprintf(sb, "%s_text_%d:\n    .byte   %d, %d\n", n, i, enc[0], enc[1])
+			for _, l := range lines {
+				sb.WriteString(asciz(l))
+			}
+			sb.WriteString("    .byte   0\n")
+		}
+		sb.WriteString("    .balign 2\n")
+	}
+	if len(res.Figures) > 0 {
+		fmt.Fprintf(sb, "\n%s_figures:\n", n)
+		for _, f := range res.Figures {
+			r := f.Record(convert.FigureLine)
+			fmt.Fprintf(sb, "    .short  0x%04X, 0x%04X | %s\n    .long   0x%08X, 0x%08X\n    .short  %d\n", f.X, f.Y, f.Name, binary.BigEndian.Uint32(r[4:]), binary.BigEndian.Uint32(r[8:]), f.Slot)
+			parts := make([]string, rom.DefinitionSize)
+			for i, b := range r[14:] {
+				parts[i] = fmt.Sprintf("0x%02X", b)
+			}
+			fmt.Fprintf(sb, "    .byte   %s\n", strings.Join(parts, ", "))
+		}
+		sb.WriteString("    .long   0\n")
+	}
+	if len(res.FigureColours) > 0 {
+		fmt.Fprintf(sb, "\n%s_figure_colours:\n", n)
+		words(sb, res.FigureColours)
+	}
+	spawns(sb, res)
+	if len(res.Entrances) > 0 {
+		sb.WriteString("\n")
+		for _, e := range res.Entrances {
+			fmt.Fprintf(sb, "    .globl  %s_entrance_%d_x, %s_entrance_%d_y\n    .set    %s_entrance_%d_x, 0x%04X\n    .set    %s_entrance_%d_y, 0x%04X\n", n, e.Index, n, e.Index, n, e.Index, e.X, n, e.Index, e.Y)
+		}
+	}
+}
+
+// asciz writes one NUL-terminated string, escaping what the assembler would misread.
+func asciz(s string) string {
+	return "    .asciz  \"" + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(s) + "\"\n"
+}
+
+// spawns writes a record for each spawn area (the frames between two rolls, 0 for the game's own; 1 when a
+// group is tried on every side of the party; its list, or 0 when nothing spawns), the lists of eight
+// entries, and the grid: its rectangle in metatile cells, then one byte a cell, 0 or an area's number from 1.
+func spawns(sb *strings.Builder, res *convert.Result) {
+	if len(res.Spawns) == 0 {
+		return
+	}
+	n := res.Name
+	fmt.Fprintf(sb, "\n%s_spawns:\n", n)
+	for i, s := range res.Spawns {
+		all := 0
+		if s.All {
+			all = 1
+		}
+		fmt.Fprintf(sb, "    .short  %d, %d | %s\n", s.Pause, all, s.Name)
+		if len(s.Monsters) > 0 {
+			fmt.Fprintf(sb, "    .long   %s_spawn_%d\n", n, i+1)
+		} else {
+			sb.WriteString("    .long   0\n")
+		}
+	}
+	for i, s := range res.Spawns {
+		if len(s.Monsters) == 0 {
+			continue
+		}
+		fmt.Fprintf(sb, "%s_spawn_%d:\n", n, i+1)
+		for _, m := range s.Monsters {
+			fmt.Fprintf(sb, "    .byte   0x%02X, 0x%02X, %d, %d | %s\n", m.ID, m.Min<<4|m.Max, m.Level, m.Affinity, m.Name)
+		}
+	}
+	g := res.SpawnGrid
+	fmt.Fprintf(sb, "%s_spawn_grid:\n    .short  %d, %d, %d, %d\n", n, g.X, g.Y, g.W, g.H)
+	for y := 0; y < g.H; y++ {
+		parts := make([]string, g.W)
+		for x := range parts {
+			parts[x] = fmt.Sprint(g.Cells[y*g.W+x])
+		}
+		fmt.Fprintf(sb, "    .byte   %s\n", strings.Join(parts, ", "))
+	}
+	sb.WriteString("    .balign 2\n")
 }

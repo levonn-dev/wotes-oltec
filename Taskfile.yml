@@ -77,16 +77,16 @@ tasks:
       - go test ./...
 
   tiled:roundtrip:
-    desc: Extract every ROM region and convert it back, comparing every tile word (needs the configured build tree)
+    desc: Round-trip every ROM region, read every dungeon level and check two extracts match (needs the configured build tree)
     dir: wotes-tiled
     env:
       WOTES_CLEAN_ROM: '{{.ROOT_DIR}}/build/m68k/clean.md'
     cmds:
       - task: configure
-      - go test -run TestRoundTrip ./internal/convert/
+      - go test -run 'TestRoundTrip|TestDungeonsReal|TestRunIsDeterministicReal|TestSpeechRoundTripReal|TestCityFiguresReal' ./internal/convert/ ./internal/rom/ ./internal/extract/
 
   tiled:extract:
-    desc: Extract every outdoor tile set and map of the clean ROM into maps/rom
+    desc: Extract every outdoor tile set and map and every dungeon level of the clean ROM into maps/rom
     cmds:
       - task: configure
       - task: tiled:build

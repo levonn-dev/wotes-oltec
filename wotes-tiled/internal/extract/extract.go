@@ -17,11 +17,12 @@ import (
 
 // Layout constants shared by extraction, conversion and scaffolding.
 const (
-	TileColumns = 32  // tiles per row in a tile tileset
-	MetaColumns = 64  // metatiles per row in definitions and metatile tilesets
-	MapSize     = 256 // metatiles per side of a land map
-	FlagSolid   = 1   // the marker tile's id in the flags tileset
-	FlagCount   = 2   // tiles in the flags tileset
+	TileColumns = 32    // tiles per row in a tile tileset
+	MetaColumns = 64    // metatiles per row in definitions and metatile tilesets
+	MapSize     = 256   // metatiles per side of a land map
+	FlagSolid   = 1     // the marker tile's id in the flags tileset
+	FlagCount   = 2     // tiles in the flags tileset
+	SolidAll    = 0x1FF // the solid pattern that blocks all nine tiles of a metatile
 )
 
 // Layer names.
@@ -45,29 +46,45 @@ const (
 	PropDefinitions = "wotes.definitions"
 )
 
+// SolidName names the solid layer's pattern tileset.
+const SolidName = "solid"
+
 // Tileset kinds.
 const (
 	KindTiles     = "tiles"
 	KindMetatiles = "metatiles"
 	KindFlags     = "flags"
 	KindProject   = "project-metatiles"
+	KindSolid     = "solid"
 )
 
-// Run writes every region into dir/rom.
-func Run(r rom.ROM, regions []rom.Region, dir string) error {
+// Run writes every region of the game into dir/rom.
+func Run(g *rom.Game, dir string) error {
 	out := filepath.Join(dir, "rom")
 	if err := os.MkdirAll(out, 0o755); err != nil {
 		return err
 	}
-	pal := r.Palette()
+	pal := g.Palette()
 	if err := WriteFlags(out); err != nil {
 		return err
 	}
-	if err := WriteFigures(r, pal, out); err != nil {
+	if err := WriteSolid(out); err != nil {
 		return err
 	}
-	for _, reg := range regions {
-		if err := Region(r, pal, reg, out); err != nil {
+	if err := WriteFigures(g, pal, out); err != nil {
+		return err
+	}
+	if err := WriteSides(out); err != nil {
+		return err
+	}
+	if err := WriteWalls(g, out); err != nil {
+		return err
+	}
+	if err := WriteDungeons(g, out); err != nil {
+		return err
+	}
+	for _, reg := range g.Layout.Regions {
+		if err := Region(g, pal, reg, out); err != nil {
 			return err
 		}
 	}
@@ -76,13 +93,13 @@ func Run(r rom.ROM, regions []rom.Region, dir string) error {
 
 // Region writes one region's tile tilesets, metatile definitions, metatile tileset and map, with the map's
 // object layers, into out.
-func Region(r rom.ROM, pal rom.Palette, reg rom.Region, out string) error {
-	tiles := r.Tiles(reg)
-	metas := r.Metatiles(reg)
-	blocks := r.Blocks(reg)
+func Region(g *rom.Game, pal rom.Palette, reg rom.Region, out string) error {
+	tiles := g.Tiles(reg)
+	metas := g.Metatiles(reg)
+	blocks := g.Blocks(reg)
 	fetch := render.Fetcher(tiles)
 	file := reg.Name + ".tmj"
-	front, ground := r.Cells(reg.Front), r.Cells(reg.Ground)
+	front, ground := g.Cells(int(reg.Front)), g.Cells(int(reg.Ground))
 	groundGIDs, err := expand(&ground, blocks, len(metas), file, LayerGround)
 	if err != nil {
 		return err
@@ -122,14 +139,25 @@ func Region(r rom.ROM, pal rom.Palette, reg rom.Region, out string) error {
 	}
 	tilesets := []tiled.TilesetRef{{FirstGID: 1, Source: reg.Name + "-metatiles.tsj"}, {FirstGID: 1 + len(metas), Source: "flags.tsj"}}
 	figuresGID := 0
-	if hasFigures(reg) {
-		figuresGID = 1 + len(metas) + FlagCount
+	solidGID := 1 + len(metas) + FlagCount
+	if hasFigures(g.Layout, reg) {
+		figuresGID = solidGID
 		tilesets = append(tilesets, tiled.TilesetRef{FirstGID: figuresGID, Source: FiguresName + ".tsj"})
+		solidGID += rom.FigureCount
+	}
+	tilesets = append(tilesets, tiled.TilesetRef{FirstGID: solidGID, Source: SolidName + ".tsj"})
+	// Only the ground plane blocks: on the front plane priority draws over the party.
+	solid := make([]uint32, MapSize*MapSize)
+	for i, gid := range groundGIDs {
+		if mask := SolidMask(metas[gid-1]); mask != 0 {
+			solid[i] = uint32(solidGID + mask)
+		}
 	}
 	m := NewLandMap(reg.Name, tilesets)
 	m.Layers[0].SetData(groundGIDs)
 	m.Layers[1].SetData(frontGIDs)
-	layers, next, err := ObjectLayers(r, reg, m.NextLayerID, m.NextObjectID, figuresGID)
+	m.Layers[2].SetData(solid)
+	layers, next, err := ObjectLayers(g, reg, m.NextLayerID, m.NextObjectID, figuresGID)
 	if err != nil {
 		return fmt.Errorf("%s: %v", file, err)
 	}
@@ -156,6 +184,17 @@ func expand(cells *rom.Cells, blocks []rom.Block, metaCount int, file, layer str
 		}
 	}
 	return gids, nil
+}
+
+// SolidMask has bit i set when word i of the metatile, in reading order, carries priority.
+func SolidMask(m rom.Metatile) int {
+	mask := 0
+	for i, w := range m {
+		if w.Priority() {
+			mask |= 1 << i
+		}
+	}
+	return mask
 }
 
 // SolidProps marks every metatile with a priority tile in the tileset's per-tile properties.
@@ -244,16 +283,39 @@ func NewLandMap(base string, tilesets []tiled.TilesetRef) *tiled.Map {
 // WriteFlags writes the two-tile marker tileset: tile 0 empty, tile 1 a red cross.
 func WriteFlags(dir string) error {
 	img := image.NewNRGBA(image.Rect(0, 0, 16, 8))
-	red := color.NRGBA{R: 255, A: 255}
-	for i := 0; i < 8; i++ {
-		img.SetNRGBA(8+i, i, red)
-		img.SetNRGBA(8+i, 7-i, red)
-	}
+	cross(img, 8, 0)
 	if err := WritePNG(filepath.Join(dir, "flags.png"), img); err != nil {
 		return err
 	}
 	ts := NewTileset("flags", 8, FlagCount, FlagCount, 16, 8, []tiled.Property{tiled.Str(PropKind, KindFlags)})
 	return tiled.WriteTileset(filepath.Join(dir, "flags.tsj"), ts)
+}
+
+// WriteSolid writes the solid layer's patterns, 24 pixels square: pattern k crosses each 8-pixel tile whose
+// bit is set in k, bit i for the metatile's word i, so pattern 0 is empty and SolidAll crosses all nine.
+func WriteSolid(dir string) error {
+	img := image.NewNRGBA(image.Rect(0, 0, TileColumns*24, (SolidAll+1)/TileColumns*24))
+	for k := 0; k <= SolidAll; k++ {
+		for i := 0; i < 9; i++ {
+			if k&(1<<i) != 0 {
+				cross(img, k%TileColumns*24+i%3*8, k/TileColumns*24+i/3*8)
+			}
+		}
+	}
+	if err := WritePNG(filepath.Join(dir, SolidName+".png"), img); err != nil {
+		return err
+	}
+	ts := NewTileset(SolidName, 24, SolidAll+1, TileColumns, img.Bounds().Dx(), img.Bounds().Dy(), []tiled.Property{tiled.Str(PropKind, KindSolid)})
+	return tiled.WriteTileset(filepath.Join(dir, SolidName+".tsj"), ts)
+}
+
+// cross draws the red marker cross over the 8-pixel square at (x0, y0).
+func cross(img *image.NRGBA, x0, y0 int) {
+	red := color.NRGBA{R: 255, A: 255}
+	for i := 0; i < 8; i++ {
+		img.SetNRGBA(x0+i, y0+i, red)
+		img.SetNRGBA(x0+i, y0+7-i, red)
+	}
 }
 
 // WritePNG encodes an image to path.

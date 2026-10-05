@@ -20,17 +20,17 @@ const (
 )
 
 // Figures draws the 13 figures in one row, on the palette line the figure records select.
-func Figures(r rom.ROM, pal rom.Palette) *image.NRGBA {
+func Figures(g *rom.Game, pal rom.Palette) *image.NRGBA {
 	img := image.NewNRGBA(image.Rect(0, 0, rom.FigureCount*FigureWidth, FigureHeight))
 	for f := 0; f < rom.FigureCount; f++ {
-		render.Sprite(img, f*FigureWidth, 0, r.FigureTiles(f), rom.FigureTall, pal.Line(rom.FigurePalette))
+		render.Sprite(img, f*FigureWidth, 0, g.FigureTiles(f), rom.FigureTall, pal.Line(rom.FigurePalette))
 	}
 	return img
 }
 
 // WriteFigures writes the figures tileset and its image into out.
-func WriteFigures(r rom.ROM, pal rom.Palette, out string) error {
-	img := Figures(r, pal)
+func WriteFigures(g *rom.Game, pal rom.Palette, out string) error {
+	img := Figures(g, pal)
 	if err := WritePNG(filepath.Join(out, FiguresName+".png"), img); err != nil {
 		return err
 	}
@@ -38,7 +38,7 @@ func WriteFigures(r rom.ROM, pal rom.Palette, out string) error {
 		tiled.Str(PropKind, KindFigures), tiled.Int(PropPalette, rom.FigurePalette)})
 	ts.TileHeight = FigureHeight
 	for f := 0; f < rom.FigureCount; f++ {
-		ts.Tiles = append(ts.Tiles, tiled.TileDef{ID: f, Properties: []tiled.Property{tiled.Int(PropTile, rom.FigureTile(f))}})
+		ts.Tiles = append(ts.Tiles, tiled.TileDef{ID: f, Properties: []tiled.Property{tiled.Int(PropTile, g.Layout.FigureTile(f))}})
 	}
 	return tiled.WriteTileset(filepath.Join(out, FiguresName+".tsj"), ts)
 }

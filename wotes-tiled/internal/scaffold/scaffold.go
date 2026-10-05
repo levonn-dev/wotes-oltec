@@ -1,4 +1,4 @@
-// Package scaffold starts a land map: the map, its metatile definitions and a one-tile project tileset.
+// Package scaffold starts a land map: the map with its object layers, its metatile definitions and a one-tile project tileset.
 package scaffold
 
 import (
@@ -14,7 +14,7 @@ import (
 )
 
 // New writes dir/name.tmj, dir/name-metatiles.tmj and dir/gen/name-metatiles.tsj with its image, all
-// referencing the extracted tilesets of base under dir/rom. It refuses to overwrite.
+// referencing the extracted tilesets of base and the figures tileset under dir/rom. It refuses to overwrite.
 func New(dir, name string, base rom.Region) (err error) {
 	if err := convert.CheckName(name); err != nil {
 		return fmt.Errorf("new: %v", err)
@@ -60,10 +60,17 @@ func New(dir, name string, base rom.Region) (err error) {
 	if err := tiled.WriteTileset(tsPath, ts); err != nil {
 		return err
 	}
+	figuresGID := 1 + base.MetaCount + extract.FlagCount
 	m := extract.NewLandMap(base.Name, []tiled.TilesetRef{
 		{FirstGID: 1, Source: "rom/" + base.Name + "-metatiles.tsj"},
 		{FirstGID: 1 + base.MetaCount, Source: "rom/flags.tsj"},
-		{FirstGID: 1 + base.MetaCount + 2, Source: "gen/" + name + "-metatiles.tsj"}})
+		{FirstGID: figuresGID, Source: "rom/" + extract.FiguresName + ".tsj"},
+		{FirstGID: figuresGID + rom.FigureCount, Source: "gen/" + name + "-metatiles.tsj"}})
+	layers := []string{extract.LayerTransitions, extract.LayerTriggers, extract.LayerNPCs, extract.LayerEncounters}
+	for i, layer := range layers {
+		m.Layers = append(m.Layers, tiled.Layer{Type: "objectgroup", ID: m.NextLayerID + i, Name: layer, Opacity: 1, Visible: true, DrawOrder: "topdown", Objects: []tiled.Object{}})
+	}
+	m.NextLayerID += len(layers)
 	written = append(written, mapPath)
 	return tiled.WriteMap(mapPath, m)
 }

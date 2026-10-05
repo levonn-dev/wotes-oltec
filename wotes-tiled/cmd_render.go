@@ -22,16 +22,21 @@ func runRender(args []string) error {
 	plane := fs.String("plane", "both", "ground, front or both")
 	scale := fs.Int("scale", 4, fmt.Sprintf("1, 2 or 4: the image is %d/scale pixels square", rom.MapPixels))
 	solid := fs.Bool("solid", false, "tint blocked ground tiles red")
+	layout := fs.String("layout", "", "a layout file replacing the built-in clean ROM layout")
 	if err := fs.Parse(rest); err != nil {
 		return err
 	}
 	if *romPath == "" || *out == "" || (target == "") == (*region == "") {
-		return fmt.Errorf("render: usage: render (MAP | --region REGION) --rom PATH --out FILE.png [--plane ground|front|both] [--scale 1|2|4] [--solid]")
+		return fmt.Errorf("render: usage: render (MAP | --region REGION) --rom PATH --out FILE.png [--plane ground|front|both] [--scale 1|2|4] [--solid] [--layout FILE]")
 	}
 	if err := render.CheckOptions(*plane, *scale); err != nil {
 		return fmt.Errorf("render: %v", err)
 	}
-	r, err := rom.Load(*romPath)
+	l, err := loadLayout(*layout)
+	if err != nil {
+		return err
+	}
+	g, err := rom.Load(*romPath, l)
 	if err != nil {
 		return err
 	}
@@ -40,19 +45,19 @@ func runRender(args []string) error {
 	var metas []rom.Metatile
 	var vram []rom.Tile
 	if *region != "" {
-		reg, err := rom.Find(*region)
+		reg, err := g.Layout.Region(*region)
 		if err != nil {
 			return err
 		}
-		ground, front, blocks, metas, vram = r.Cells(reg.Ground), r.Cells(reg.Front), r.Blocks(reg), r.Metatiles(reg), r.Tiles(reg)
+		ground, front, blocks, metas, vram = g.Cells(int(reg.Ground)), g.Cells(int(reg.Front)), g.Blocks(reg), g.Metatiles(reg), g.Tiles(reg)
 	} else {
-		res, err := convert.Convert(convert.Options{ROM: r, MapPath: target})
+		res, err := convert.Convert(convert.Options{Game: g, MapPath: target})
 		if err != nil {
 			return err
 		}
-		ground, front, blocks, metas, vram = res.Ground, res.Front, res.Blocks, res.Metatiles(r), res.VRAM
+		ground, front, blocks, metas, vram = res.Ground, res.Front, res.Blocks, res.Metatiles(g.ROM), res.VRAM
 	}
-	img, err := render.Map(&ground, &front, blocks, metas, vram, r.Palette(), *plane, *scale, *solid)
+	img, err := render.Map(&ground, &front, blocks, metas, vram, g.Palette(), *plane, *scale, *solid)
 	if err != nil {
 		return err
 	}

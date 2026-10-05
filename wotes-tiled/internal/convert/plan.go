@@ -35,8 +35,8 @@ func (c *converter) plan(reg *registry, res *Result) error {
 			}
 		}
 	}
-	res.VRAM = c.opt.ROM.Tiles(base)
-	res.Chunks = []Chunk{{Kind: "base", Region: base.Name, Count: base.TileCount, Source: base.TileSource}}
+	res.VRAM = c.opt.Game.Tiles(base)
+	res.Chunks = []Chunk{{Kind: "base", Region: base.Name, Count: base.TileCount, Source: int(base.TileSource)}}
 	next := base.TileCount
 	runs, err := borrowedRuns(borrowedSet, c.regions, next)
 	if err != nil {
@@ -45,7 +45,7 @@ func (c *converter) plan(reg *registry, res *Result) error {
 	for _, ch := range runs {
 		for n := 0; n < ch.Count; n++ {
 			vram[tileKey{Region: ch.Region, Index: ch.First + n}] = next + n
-			res.VRAM = append(res.VRAM, c.opt.ROM.Tile(ch.Source, n))
+			res.VRAM = append(res.VRAM, c.opt.Game.Tile(ch.Source, n))
 		}
 		next += ch.Count
 	}
@@ -124,7 +124,7 @@ func borrowedRuns(set map[tileKey]bool, regions []rom.Region, next int) ([]Chunk
 			j++
 		}
 		count := j - i + 1
-		chunks = append(chunks, Chunk{Kind: "borrowed", Region: k.Region, First: k.Index, Count: count, Source: other.TileSource + 32*k.Index, VRAM: next})
+		chunks = append(chunks, Chunk{Kind: "borrowed", Region: k.Region, First: k.Index, Count: count, Source: int(other.TileSource) + 32*k.Index, VRAM: next})
 		next += count
 		i = j + 1
 	}

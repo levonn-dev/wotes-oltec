@@ -12,8 +12,24 @@ var Other = rom.Region{Name: "swamp", Set: 11, TileSource: 0x09B6EE, TileCount: 
 // City is the synthetic city: the valley's tables with graphics set 2's tile source, four blank tiles.
 var City = rom.Region{Name: "city", Set: 2, TileSource: 0x086A38, TileCount: 4, Front: 0x6F3EA, Ground: 0x6FBEA, Blocks: 0x78D18, BlockCount: 2, Metatiles: 0x703EA, MetaCount: 3}
 
+// Jungle is the synthetic jungle: one blank tile, metatile and block, so that the swamp keeps ram_region 3.
+var Jungle = rom.Region{Name: "jungle", Set: 10, TileSource: 0x0932B8, TileCount: 1, Front: 0x8EAD8, Ground: 0x8F2D8, Blocks: 0x91DB8, BlockCount: 1, Metatiles: 0x8FAD8, MetaCount: 1}
+
 // Regions is the synthetic region list in ram_region order.
-var Regions = []rom.Region{City, Region, Other}
+var Regions = []rom.Region{City, Region, Jungle, Other}
+
+// Layout is the clean layout with the synthetic regions.
+func Layout() *rom.Layout {
+	l := rom.Clean
+	l.Regions = Regions
+	l.Dungeons.Stairs.Count = 2
+	l.Dungeons.Styles = []rom.StyleEntry{{Name: "test", Descriptor: 0x11624}, {Name: "other", Descriptor: 0x11638}}
+	l.Dungeons.Pieces.Count = 2
+	return &l
+}
+
+// Game is the synthetic image with its layout.
+func Game() *rom.Game { return &rom.Game{ROM: New(), Layout: Layout()} }
 
 // New returns the synthetic image.
 //
@@ -25,19 +41,19 @@ var Regions = []rom.Region{City, Region, Other}
 // Swamp tiles: 0 blank, 1 all 5, 2 pixel i is i%4. Swamp metatiles: 0 blank; 1 tiles 1 and 2 alternating on
 // line 3, its odd words h-flipped. Swamp block 0 all metatile 1; both cell arrays block 0.
 func New() rom.ROM {
-	r := make(rom.ROM, rom.Size)
+	r := make(rom.ROM, int(rom.Clean.Size))
 	for i := 0; i < 64; i++ {
 		line, c := i/16, i%16
-		put16(r, rom.PaletteOffset+2*i, int(uint16(c&7)<<1|uint16(line*2)<<5|uint16((c>>2)&7)<<9))
+		put16(r, int(rom.Clean.Palette)+2*i, int(uint16(c&7)<<1|uint16(line*2)<<5|uint16((c>>2)&7)<<9))
 	}
-	putTile(r, Region.TileSource, 1, func(i int) byte { return byte(i % 16) })
-	putTile(r, Region.TileSource, 2, func(i int) byte { return byte(1 + (i+i/8)%2) })
-	putTile(r, Region.TileSource, 3, func(int) byte { return 3 })
-	putTile(r, Other.TileSource, 1, func(int) byte { return 5 })
-	putTile(r, Other.TileSource, 2, func(i int) byte { return byte(i % 4) })
+	putTile(r, int(Region.TileSource), 1, func(i int) byte { return byte(i % 16) })
+	putTile(r, int(Region.TileSource), 2, func(i int) byte { return byte(1 + (i+i/8)%2) })
+	putTile(r, int(Region.TileSource), 3, func(int) byte { return 3 })
+	putTile(r, int(Other.TileSource), 1, func(int) byte { return 5 })
+	putTile(r, int(Other.TileSource), 2, func(i int) byte { return byte(i % 4) })
 	putMeta := func(reg rom.Region, m int, words [9]rom.Word) {
 		for i, w := range words {
-			put16(r, reg.Metatiles+18*m+2*i, int(w))
+			put16(r, int(reg.Metatiles)+18*m+2*i, int(w))
 		}
 	}
 	putMeta(Region, 1, [9]rom.Word{
@@ -55,17 +71,18 @@ func New() rom.ROM {
 	}
 	putMeta(Other, 1, mixed)
 	for i := 0; i < 64; i++ {
-		put16(r, Region.Blocks+2*i, 1)
-		put16(r, Region.Blocks+0x80+2*i, 1+i%2)
-		put16(r, Other.Blocks+2*i, 1)
+		put16(r, int(Region.Blocks)+2*i, 1)
+		put16(r, int(Region.Blocks)+0x80+2*i, 1+i%2)
+		put16(r, int(Other.Blocks)+2*i, 1)
 	}
 	for i := 0; i < 1024; i++ {
-		put16(r, Region.Ground+2*i, 0)
-		put16(r, Region.Front+2*i, 0)
-		put16(r, Other.Ground+2*i, 0)
-		put16(r, Other.Front+2*i, 0)
+		put16(r, int(Region.Ground)+2*i, 0)
+		put16(r, int(Region.Front)+2*i, 0)
+		put16(r, int(Other.Ground)+2*i, 0)
+		put16(r, int(Other.Front)+2*i, 0)
 	}
-	put16(r, Region.Ground, 1)
+	put16(r, int(Region.Ground), 1)
 	objects(r)
+	dungeons(r, &rom.Clean)
 	return r
 }

@@ -23,8 +23,7 @@ const (
 
 // Options steer Convert.
 type Options struct {
-	ROM          rom.ROM
-	Regions      []rom.Region // rom.Standard when nil
+	Game         *rom.Game
 	MapPath      string
 	TileBudget   int // DefaultBudget when 0
 	TilesetsOnly bool
@@ -72,20 +71,29 @@ type Counts struct {
 
 // Result is a converted map.
 type Result struct {
-	Name      string
-	Base      rom.Region
-	Front     rom.Cells
-	Ground    rom.Cells
-	Blocks    []rom.Block
-	Generated []rom.Metatile // the entries after the base region's ROM metatiles
-	Chunks    []Chunk
-	NewTiles  []rom.Tile // pixel data of the new chunk, in VRAM order
-	VRAM      []rom.Tile // every tile in VRAM order, for rendering
-	Places    []Place
-	Counts    Counts
-	Deps      []string
-	Budget    int
-	Project   bool // the map references its project tileset, so Convert regenerated it
+	Name          string
+	Base          rom.Region
+	Front         rom.Cells
+	Ground        rom.Cells
+	Blocks        []rom.Block
+	Generated     []rom.Metatile // the entries after the base region's ROM metatiles
+	Chunks        []Chunk
+	NewTiles      []rom.Tile // pixel data of the new chunk, in VRAM order
+	VRAM          []rom.Tile // every tile in VRAM order, for rendering
+	Places        []Place
+	Region        int // the map's wotes.region, the ram_region whose entrances it places
+	HasRegion     bool
+	Entrances     []Entrance
+	Triggers      []Trigger
+	Texts         [][]string // the message texts the triggers show, by Trigger.Text
+	Figures       []Figure
+	FigureColours []uint16 // the palette line of the figures, nil without wotes.figure_colours
+	Spawns        []Spawn
+	SpawnGrid     SpawnGrid
+	Counts        Counts
+	Deps          []string
+	Budget        int
+	Project       bool // the map references its project tileset, so Convert regenerated it
 }
 
 // Metatiles returns the whole table: the base region's ROM metatiles, then the generated ones.
@@ -105,10 +113,7 @@ type converter struct {
 
 // Convert reads a land map and builds its tables.
 func Convert(opt Options) (*Result, error) {
-	c := &converter{opt: opt, regions: opt.Regions, pal: opt.ROM.Palette(), sheets: map[string]*Sheet{}, metas: map[string][]rom.Metatile{}}
-	if c.regions == nil {
-		c.regions = rom.Standard
-	}
+	c := &converter{opt: opt, regions: opt.Game.Layout.Regions, pal: opt.Game.Palette(), sheets: map[string]*Sheet{}, metas: map[string][]rom.Metatile{}}
 	budget := opt.TileBudget
 	if budget == 0 {
 		budget = DefaultBudget
@@ -177,6 +182,9 @@ func Convert(opt Options) (*Result, error) {
 	if res.Places, err = places(layers.places, opt.MapPath); err != nil {
 		return nil, err
 	}
+	if err := c.objects(m, infos, layers, res); err != nil {
+		return nil, err
+	}
 	sort.Strings(c.deps)
 	res.Deps = uniq(c.deps)
 	return res, nil
@@ -196,7 +204,7 @@ func (c *converter) regionMetatiles(name string) ([]rom.Metatile, error) {
 	if err != nil {
 		return nil, err
 	}
-	c.metas[name] = c.opt.ROM.Metatiles(reg)
+	c.metas[name] = c.opt.Game.Metatiles(reg)
 	return c.metas[name], nil
 }
 
@@ -231,10 +239,11 @@ func uniq(sorted []string) []string {
 	return out
 }
 
-// landLayers holds the four layers a land map must have.
+// landLayers holds the four layers a land map must have and the four object layers it may have.
 type landLayers struct {
-	ground, front, solid []uint32
-	places               *tiled.Layer
+	ground, front, solid                    []uint32
+	places                                  *tiled.Layer
+	transitions, triggers, npcs, encounters *tiled.Layer
 }
 
 // landLayersOf finds and decodes the land map's layers.
@@ -267,6 +276,20 @@ func landLayersOf(m *tiled.Map, mapPath string) (*landLayers, error) {
 				return nil, fmt.Errorf("%s: layer %s must be an object layer", mapPath, l.Name)
 			}
 			ll.places = l
+		case extract.LayerTransitions, extract.LayerTriggers, extract.LayerNPCs, extract.LayerEncounters:
+			if l.Type != "objectgroup" {
+				return nil, fmt.Errorf("%s: layer %s must be an object layer", mapPath, l.Name)
+			}
+			switch l.Name {
+			case extract.LayerTransitions:
+				ll.transitions = l
+			case extract.LayerTriggers:
+				ll.triggers = l
+			case extract.LayerNPCs:
+				ll.npcs = l
+			default:
+				ll.encounters = l
+			}
 		}
 	}
 	if ll.ground == nil || ll.front == nil || ll.solid == nil || ll.places == nil {

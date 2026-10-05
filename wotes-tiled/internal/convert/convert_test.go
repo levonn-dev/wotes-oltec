@@ -26,6 +26,7 @@ const (
 	gSwamp1   = 7
 	gProject0 = 8
 	gProject1 = 9
+	gFigures  = 30 // the figures tileset, after the project tileset's two entries
 )
 
 func must(t *testing.T, err error) {
@@ -35,13 +36,16 @@ func must(t *testing.T, err error) {
 	}
 }
 
+// fixtureColours is a palette line of sixteen valid colour words.
+const fixtureColours = "0x0000 0x0222 0x0246 0x026A 0x048E 0x06AE 0x000A 0x0C40 0x00CE 0x0088 0x0EEE 0x0888 0x0006 0x00A0 0x0040 0x0224"
+
 // fixture writes the test map and everything it references into a temporary folder.
-func fixture(t *testing.T) (string, rom.ROM) {
+func fixture(t *testing.T) (string, *rom.Game) {
 	t.Helper()
 	dir := t.TempDir()
-	r := romtest.New()
-	must(t, extract.Run(r, romtest.Regions, dir))
-	pal := r.Palette()
+	g := romtest.Game()
+	must(t, extract.Run(g, dir))
+	pal := g.Palette()
 	img := image.NewNRGBA(image.Rect(0, 0, 8, 8))
 	for i := 0; i < 64; i++ {
 		if i%4 != 0 {
@@ -84,14 +88,30 @@ func fixture(t *testing.T) (string, rom.ROM) {
 	m.Layers[3].Objects = []tiled.Object{
 		{ID: 1, Name: "cave", X: 100, Y: 200, Point: true, Visible: true},
 		{ID: 2, Name: "shrine", X: 240, Y: 480, Width: 48, Height: 24, Visible: true}}
-	m.NextObjectID = 3
+	m.Tilesets = append(m.Tilesets, tiled.TilesetRef{FirstGID: gFigures, Source: "rom/city-figures.tsj"})
+	m.Properties = append(m.Properties, tiled.Int(extract.PropRegion, 3), tiled.Str(extract.PropFigureColours, fixtureColours))
+	group := func(id int, name string, objects ...tiled.Object) tiled.Layer {
+		return tiled.Layer{Type: "objectgroup", ID: id, Name: name, Opacity: 1, Visible: true, DrawOrder: "topdown", Objects: objects}
+	}
+	props := func(ps ...tiled.Property) []tiled.Property { return ps }
+	m.Layers = append(m.Layers,
+		group(5, extract.LayerTransitions,
+			tiled.Object{ID: 3, Name: "cave", X: 0x30C, Y: 0x40A, Point: true, Visible: true, Properties: props(tiled.Str(extract.PropKind, extract.KindEntrance), tiled.Int(extract.PropIndex, 3))}),
+		group(6, extract.LayerTriggers,
+			tiled.Object{ID: 4, Name: "armour", X: 0x100, Y: 0x110, Width: 0x30, Height: 0x20, Visible: true, Properties: props(tiled.Str(extract.PropKind, extract.KindShop), tiled.Int(extract.PropShop, 1), tiled.Int(extract.PropLevel, 3))},
+			tiled.Object{ID: 5, Name: "pool", X: 0x200, Y: 0x210, Width: 24, Height: 24, Visible: true, Properties: props(tiled.Str(extract.PropKind, extract.KindRestore), tiled.Str(extract.PropText, "THE POOL RESTORES YOU."))},
+			tiled.Object{ID: 6, Name: "elder", X: 0x300, Y: 0x310, Width: 24, Height: 1, Visible: true, Properties: props(tiled.Str(extract.PropKind, extract.KindSpeech), tiled.Str(extract.PropText, "WELCOME, TRAVELLERS.\nTHE HILLS ARE KIND."))}),
+		group(7, extract.LayerNPCs,
+			tiled.Object{ID: 7, Name: "elder", GID: gFigures + 3, X: 0x300 - 8, Y: 0x310 - 8 + extract.FigureHeight, Width: extract.FigureWidth, Height: extract.FigureHeight, Visible: true},
+			tiled.Object{ID: 8, Name: "walker", GID: gFigures + 5, X: 0x400 - 8, Y: 0x410 - 8 + extract.FigureHeight, Width: extract.FigureWidth, Height: extract.FigureHeight, Visible: true, Properties: props(tiled.Str(extract.PropMoves, extract.MovesEastWest))}))
+	m.NextLayerID, m.NextObjectID = 8, 9
 	must(t, tiled.WriteMap(filepath.Join(dir, "test.tmj"), m))
-	return dir, r
+	return dir, g
 }
 
 func convertFixture(t *testing.T, edit func(dir string, m *tiled.Map)) (*convert.Result, error) {
 	t.Helper()
-	dir, r := fixture(t)
+	dir, g := fixture(t)
 	if edit != nil {
 		m, err := tiled.ReadMap(filepath.Join(dir, "test.tmj"))
 		must(t, err)
@@ -104,7 +124,7 @@ func convertFixture(t *testing.T, edit func(dir string, m *tiled.Map)) (*convert
 	if _, err := os.Stat(mapPath); err != nil {
 		mapPath = filepath.Join(dir, "my-land.tmj")
 	}
-	return convert.Convert(convert.Options{ROM: r, Regions: romtest.Regions, MapPath: mapPath})
+	return convert.Convert(convert.Options{Game: g, MapPath: mapPath})
 }
 
 // editDefinitions rewrites the fixture's definitions map.
@@ -117,12 +137,13 @@ func editDefinitions(t *testing.T, dir string, edit func(d *tiled.Map)) {
 }
 
 func TestConvertFixture(t *testing.T) {
-	dir, r := fixture(t)
-	res, err := convert.Convert(convert.Options{ROM: r, Regions: romtest.Regions, MapPath: filepath.Join(dir, "test.tmj")})
+	dir, g := fixture(t)
+	res, err := convert.Convert(convert.Options{Game: g, MapPath: filepath.Join(dir, "test.tmj")})
 	must(t, err)
-	// Two project metatiles (3, 4), the pasted swamp metatile (5), one solid variant of it (6); the base's
-	// metatile 2 is solid already, so its marker derives nothing; metatile 0 is the base's blank.
-	if len(res.Generated) != 4 || res.Counts.Project != 2 || res.Counts.Pasted != 1 || res.Counts.Solid != 1 || res.Counts.Blank != 0 {
+	// Two project metatiles (3, 4), the pasted swamp metatile (5), its solid variant (6) and project metatile 0
+	// without the blocking of its own on unmarked cell 1 (7); the base's metatile 2 is solid already, so its
+	// marker derives nothing; metatile 0 is the base's blank.
+	if len(res.Generated) != 5 || res.Counts.Project != 2 || res.Counts.Pasted != 1 || res.Counts.Solid != 2 || res.Counts.Blank != 0 {
 		t.Fatalf("generated %d, counts %+v", len(res.Generated), res.Counts)
 	}
 	if !res.Generated[0][0].Priority() || res.Generated[0][1].Priority() || res.Generated[0][0].Tile() != 1 || res.Generated[0][0].Palette() != 2 {
@@ -130,7 +151,7 @@ func TestConvertFixture(t *testing.T) {
 	}
 	// Chunks: the base's 4 tiles, swamp tiles 1 and 2 borrowed as one run at VRAM 4, the sheet tile new at VRAM 6.
 	if len(res.Chunks) != 3 || res.Chunks[1].Kind != "borrowed" || res.Chunks[1].First != 1 || res.Chunks[1].Count != 2 || res.Chunks[1].VRAM != 4 ||
-		res.Chunks[1].Source != romtest.Other.TileSource+32 || res.Chunks[2].Kind != "new" || res.Chunks[2].VRAM != 6 || len(res.VRAM) != 7 {
+		res.Chunks[1].Source != int(romtest.Other.TileSource)+32 || res.Chunks[2].Kind != "new" || res.Chunks[2].VRAM != 6 || len(res.VRAM) != 7 {
 		t.Fatalf("chunks %+v, vram %d", res.Chunks, len(res.VRAM))
 	}
 	if res.Generated[1][0].Tile() != 6 || res.Generated[1][0].Palette() != 1 {
@@ -146,7 +167,7 @@ func TestConvertFixture(t *testing.T) {
 	if len(res.Blocks) != 4 || res.Ground[0] != 0 || res.Ground[1] != 1 || res.Ground[1023] != 1 || res.Front[0] != 2 || res.Front[1] != 3 {
 		t.Fatalf("blocks %d, ground %v, front %v", len(res.Blocks), res.Ground[:2], res.Front[:2])
 	}
-	if b := res.Blocks[0]; b[0] != 6 || b[1] != 3 || b[2] != 4 || b[3] != 2 || b[4] != 1 {
+	if b := res.Blocks[0]; b[0] != 6 || b[1] != 7 || b[2] != 4 || b[3] != 2 || b[4] != 1 {
 		t.Fatalf("block 0 = %v", b[:5])
 	}
 	if res.Blocks[2][8] != 1 || res.Blocks[2][0] != 0 {
@@ -337,7 +358,7 @@ func TestPastedLikeProject(t *testing.T) {
 	})
 	must(t, err)
 	c := res.Counts
-	if c.Project != 3 || c.Pasted != 0 || c.Solid != 1 || c.Blank != 0 || len(res.Generated) != c.Project+c.Pasted+c.Solid+c.Blank {
+	if c.Project != 3 || c.Pasted != 0 || c.Solid != 2 || c.Blank != 0 || len(res.Generated) != c.Project+c.Pasted+c.Solid+c.Blank {
 		t.Fatalf("generated %d, counts %+v", len(res.Generated), c)
 	}
 }
@@ -361,7 +382,7 @@ func TestSolidVariantInBaseTable(t *testing.T) {
 	})
 	must(t, err)
 	c := res.Counts
-	if c.Project != 3 || c.Pasted != 1 || c.Solid != 1 || len(res.Generated) != 5 {
+	if c.Project != 3 || c.Pasted != 1 || c.Solid != 2 || len(res.Generated) != 6 {
 		t.Fatalf("generated %d, counts %+v", len(res.Generated), c)
 	}
 	if b := res.Blocks[0]; b[4] != 2 || b[3] != 2 || b[0] != 7 {
@@ -370,8 +391,8 @@ func TestSolidVariantInBaseTable(t *testing.T) {
 }
 
 func TestTileBudget(t *testing.T) {
-	dir, r := fixture(t)
-	_, err := convert.Convert(convert.Options{ROM: r, Regions: romtest.Regions, MapPath: filepath.Join(dir, "test.tmj"), TileBudget: 6})
+	dir, g := fixture(t)
+	_, err := convert.Convert(convert.Options{Game: g, MapPath: filepath.Join(dir, "test.tmj"), TileBudget: 6})
 	if err == nil || !strings.Contains(err.Error(), "budget is 6") {
 		t.Fatalf("seven tiles against a budget of six must fail, got %v", err)
 	}
@@ -398,7 +419,10 @@ func TestTooManyBlocks(t *testing.T) {
 }
 
 func TestTooManyMetatiles(t *testing.T) {
-	_, err := convertFixture(t, func(dir string, _ *tiled.Map) {
+	_, err := convertFixture(t, func(dir string, m *tiled.Map) {
+		// The generated project tileset grows over the figures tileset's GIDs, which the objects do not need here.
+		m.Tilesets = m.Tilesets[:len(m.Tilesets)-1]
+		m.Layers = m.Layers[:4]
 		editDefinitions(t, dir, func(d *tiled.Map) {
 			// 57 rows of 64 groups: 3648 project metatiles on top of the synthetic valley's 3.
 			const rows = 57
@@ -420,8 +444,8 @@ func TestTooManyMetatiles(t *testing.T) {
 }
 
 func TestTilesetsOnly(t *testing.T) {
-	dir, r := fixture(t)
-	res, err := convert.Convert(convert.Options{ROM: r, Regions: romtest.Regions, MapPath: filepath.Join(dir, "test.tmj"), TilesetsOnly: true})
+	dir, g := fixture(t)
+	res, err := convert.Convert(convert.Options{Game: g, MapPath: filepath.Join(dir, "test.tmj"), TilesetsOnly: true})
 	must(t, err)
 	if len(res.Blocks) != 0 {
 		t.Fatal("tilesets-only must stop before the tables")
@@ -433,17 +457,72 @@ func TestTilesetsOnly(t *testing.T) {
 	}
 }
 
-func TestExtractedCityConverts(t *testing.T) {
-	dir := t.TempDir()
-	r := romtest.New()
-	if err := extract.Run(r, romtest.Regions, dir); err != nil {
-		t.Fatal(err)
+// gSolid is where the solid patterns start when a test adds them to the fixture's map.
+const gSolid = 50
+
+// withSolid adds the solid patterns to the fixture's map and sets cells of its solid layer.
+func withSolid(cells map[int]uint32) func(string, *tiled.Map) {
+	return func(_ string, m *tiled.Map) {
+		m.Tilesets = append(m.Tilesets, tiled.TilesetRef{FirstGID: gSolid, Source: "rom/" + extract.SolidName + ".tsj"})
+		solid, _ := m.Layers[2].GIDs()
+		for i, g := range cells {
+			solid[i] = g
+		}
+		m.Layers[2].SetData(solid)
 	}
-	res, err := convert.Convert(convert.Options{ROM: r, Regions: romtest.Regions, MapPath: filepath.Join(dir, "rom", "city.tmj")})
-	if err != nil {
-		t.Fatal(err)
+}
+
+func TestSolidPatternBlocksOnlyItsTiles(t *testing.T) {
+	// Ground cell 4 is valley metatile 1, which blocks nothing: the pattern blocks its top row.
+	res, err := convertFixture(t, withSolid(map[int]uint32{4: gSolid + 0b000_000_111}))
+	must(t, err)
+	if res.Counts.Solid != 3 || len(res.Generated) != 6 || res.Blocks[0][4] != 8 {
+		t.Fatalf("counts %+v, cell 4 holds metatile %d", res.Counts, res.Blocks[0][4])
 	}
-	if len(res.Places) != 0 || res.Counts.Solid != 0 {
-		t.Fatalf("an extracted map has no places of its own: %+v", res)
+	for i, w := range res.Generated[5] {
+		if w.Priority() != (i < 3) || w.Tile() != 1+i%3 || w.Palette() != 2 {
+			t.Fatalf("variant word %d = %#04x", i, uint16(w))
+		}
+	}
+}
+
+func TestSolidPatternOfTheMetatilesOwnBlockingDerivesNothing(t *testing.T) {
+	// Project metatile 0, on cell 1, blocks its first tile; valley metatile 2, on cell 3, blocks all nine.
+	res, err := convertFixture(t, withSolid(map[int]uint32{1: gSolid + 1, 3: gSolid + extract.SolidAll}))
+	must(t, err)
+	if res.Counts.Solid != 1 || res.Blocks[0][1] != 3 || res.Blocks[0][3] != 2 {
+		t.Fatalf("counts %+v, cells 1 and 3 hold metatiles %d and %d", res.Counts, res.Blocks[0][1], res.Blocks[0][3])
+	}
+}
+
+func TestACellBlocksExactlyWhatItsSolidPatternMarks(t *testing.T) {
+	// Valley metatile 2, on cell 3, blocks all nine tiles by itself and loses its marker here; project
+	// metatile 0, on cell 1, blocks its first tile and gets a pattern on its second and third.
+	res, err := convertFixture(t, withSolid(map[int]uint32{1: gSolid + 0b000_000_110, 3: 0}))
+	must(t, err)
+	generated := func(cell int) rom.Metatile {
+		t.Helper()
+		i := int(res.Blocks[0][cell]) - romtest.Region.MetaCount
+		if i < 0 || i >= len(res.Generated) {
+			t.Fatalf("cell %d holds metatile %d, not a generated one", cell, res.Blocks[0][cell])
+		}
+		return res.Generated[i]
+	}
+	for i, w := range generated(3) {
+		if w.Priority() || w.Tile() != 3 || w.Palette() != 1 {
+			t.Fatalf("cell 3 without a pattern: word %d = %#04x still blocks or draws another tile", i, uint16(w))
+		}
+	}
+	for i, w := range generated(1) {
+		if w.Priority() != (i == 1 || i == 2) || w.Tile() != 1 || w.Palette() != 2 {
+			t.Fatalf("cell 1 with a pattern on tiles 1 and 2: word %d = %#04x", i, uint16(w))
+		}
+	}
+}
+
+func TestFlippedSolidPatternIsRefused(t *testing.T) {
+	_, err := convertFixture(t, withSolid(map[int]uint32{4: (gSolid + 1) | tiled.FlipH}))
+	if err == nil || !strings.Contains(err.Error(), "layer solid: (x 4, y 0): a flipped pattern") {
+		t.Fatalf("err = %v", err)
 	}
 }

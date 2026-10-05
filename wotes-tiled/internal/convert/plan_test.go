@@ -17,9 +17,9 @@ func TestBorrowedRuns(t *testing.T) {
 	}
 	// Regions in list order, indices ascending: valley 7 alone, swamp 1 and 2 as one run, the gap before swamp 5 splits it.
 	want := []Chunk{
-		{Kind: "borrowed", Region: "valley", First: 7, Count: 1, Source: romtest.Region.TileSource + 32*7, VRAM: 10},
-		{Kind: "borrowed", Region: "swamp", First: 1, Count: 2, Source: romtest.Other.TileSource + 32, VRAM: 11},
-		{Kind: "borrowed", Region: "swamp", First: 5, Count: 1, Source: romtest.Other.TileSource + 32*5, VRAM: 13},
+		{Kind: "borrowed", Region: "valley", First: 7, Count: 1, Source: int(romtest.Region.TileSource) + 32*7, VRAM: 10},
+		{Kind: "borrowed", Region: "swamp", First: 1, Count: 2, Source: int(romtest.Other.TileSource) + 32, VRAM: 11},
+		{Kind: "borrowed", Region: "swamp", First: 5, Count: 1, Source: int(romtest.Other.TileSource) + 32*5, VRAM: 13},
 	}
 	if len(chunks) != len(want) {
 		t.Fatalf("chunks %+v", chunks)

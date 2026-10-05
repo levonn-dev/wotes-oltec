@@ -8,21 +8,21 @@ import (
 )
 
 func TestDecodeSynthetic(t *testing.T) {
-	r := romtest.New()
+	g := romtest.Game()
 	reg := romtest.Region
-	tiles := r.Tiles(reg)
+	tiles := g.Tiles(reg)
 	if len(tiles) != 4 || tiles[1][0] != 0 || tiles[1][15] != 15 || tiles[1][17] != 1 || tiles[3][63] != 3 {
 		t.Fatalf("tiles decoded wrong: %v", tiles[1][:18])
 	}
-	metas := r.Metatiles(reg)
+	metas := g.Metatiles(reg)
 	if len(metas) != 3 || metas[1][1] != rom.MakeWord(2, false, false, 2, false) || !metas[2][0].Priority() {
 		t.Fatalf("metatiles decoded wrong: %#04x", uint16(metas[1][1]))
 	}
-	blocks := r.Blocks(reg)
+	blocks := g.Blocks(reg)
 	if len(blocks) != 2 || blocks[0][63] != 1 || blocks[1][1] != 2 {
 		t.Fatalf("blocks decoded wrong: %v", blocks[1][:4])
 	}
-	ground := r.Cells(reg.Ground)
+	ground := g.Cells(int(reg.Ground))
 	if ground[0] != 1 || ground[1] != 0 {
 		t.Fatalf("cells decoded wrong: %v", ground[:2])
 	}
@@ -34,24 +34,7 @@ func TestDecodeSynthetic(t *testing.T) {
 	if w := rom.Resolve(&ground, blocks, metas, 25, 0); w != rom.MakeWord(2, false, false, 2, false) {
 		t.Fatalf("Resolve(25,0) = %#04x", uint16(w))
 	}
-	if r.Palette()[16*2+1].G != rom.Channel8(4) {
+	if g.Palette()[16*2+1].G != rom.Channel8(4) {
 		t.Fatal("palette line 2 must have green 4")
-	}
-}
-
-func TestFind(t *testing.T) {
-	if reg, err := rom.Find("jungle"); err != nil || reg.Set != 10 || reg.MetaCount != 496 {
-		t.Fatalf("Find(jungle) = %+v, %v", reg, err)
-	}
-	_, err := rom.Find("desert")
-	if want := `no region called "desert": use city, valley, jungle or swamp`; err == nil || err.Error() != want {
-		t.Fatalf("Find(desert) = %v, want %q", err, want)
-	}
-	if reg, err := rom.FindIn(romtest.Regions, "swamp"); err != nil || reg != romtest.Other {
-		t.Fatalf("FindIn(romtest.Regions, swamp) = %+v, %v", reg, err)
-	}
-	_, err = rom.FindIn(romtest.Regions, "desert")
-	if want := `no region called "desert": use city, valley or swamp`; err == nil || err.Error() != want {
-		t.Fatalf("FindIn(romtest.Regions, desert) = %v, want %q", err, want)
 	}
 }

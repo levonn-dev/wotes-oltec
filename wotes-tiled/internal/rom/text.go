@@ -6,9 +6,6 @@ import (
 	"strings"
 )
 
-// MonsterNames is where the battle roster's names start: 32 bytes per monster id.
-const MonsterNames = 0x3D30C
-
 // MessageLimit bounds a message's lines, so a table pointing at garbage fails instead of walking the ROM.
 const MessageLimit = 32
 
@@ -60,11 +57,68 @@ func (r ROM) Message(off int) ([]string, error) {
 	}
 }
 
-// MonsterName is the battle roster's name of monster id, without the spaces the ROM pads it with.
-func (r ROM) MonsterName(id int) string {
-	b := r[MonsterNames+32*id : MonsterNames+32*id+32]
+// MonsterName is the battle roster's name of monster id, without the spaces the ROM pads it with; it is
+// empty below FirstNamedMonster and when the record is not printable ASCII.
+func (g *Game) MonsterName(id int) string {
+	base := int(g.Layout.Monsters.Names) + 32*id
+	if id < FirstNamedMonster || base+32 > len(g.ROM) {
+		return ""
+	}
+	b := g.ROM[base : base+32]
 	if i := bytes.IndexByte(b, 0); i >= 0 {
 		b = b[:i]
 	}
+	for _, c := range b {
+		if c < 0x20 || c > 0x7E {
+			return ""
+		}
+	}
 	return strings.TrimSpace(string(b))
+}
+
+// The message box shows one page of ten rows, so a text has at most MessageLines lines of
+// MessageWidth characters, and its rows byte counts the lines plus two.
+const (
+	MessageWidth  = 26
+	MessageLines  = 8
+	messageBorder = 2
+)
+
+// MessageChars is every character the font draws.
+const MessageChars = " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+// CheckMessage reports a text the box cannot show: no lines, an empty line, a line too long, too many
+// lines, or a character the font lacks.
+func CheckMessage(lines []string) error {
+	if len(lines) == 0 {
+		return fmt.Errorf("a text needs at least one line")
+	}
+	if len(lines) > MessageLines {
+		return fmt.Errorf("%d lines, the box shows %d", len(lines), MessageLines)
+	}
+	for i, l := range lines {
+		if l == "" {
+			return fmt.Errorf("line %d is empty, which would end the text", i+1)
+		}
+		if len(l) > MessageWidth {
+			return fmt.Errorf("line %d is %d characters, the box shows %d", i+1, len(l), MessageWidth)
+		}
+		for _, c := range l {
+			if !strings.ContainsRune(MessageChars, c) {
+				return fmt.Errorf("line %d: %q is not a character the font draws", i+1, string(c))
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeMessage writes lines in the message box's shape: the rows byte, the zero byte the drawer
+// shows as an empty first line, each line NUL-terminated and the empty line that ends the text.
+func EncodeMessage(lines []string) []byte {
+	out := []byte{byte(len(lines) + messageBorder), 0}
+	for _, l := range lines {
+		out = append(out, l...)
+		out = append(out, 0)
+	}
+	return append(out, 0)
 }

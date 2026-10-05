@@ -9,11 +9,11 @@ import (
 )
 
 func TestMap(t *testing.T) {
-	r := romtest.New()
+	g := romtest.Game()
 	reg := romtest.Region
-	ground, front := r.Cells(reg.Ground), r.Cells(reg.Front)
-	pal := r.Palette()
-	img, err := Map(&ground, &front, r.Blocks(reg), r.Metatiles(reg), r.Tiles(reg), pal, "ground", 4, false)
+	ground, front := g.Cells(int(reg.Ground)), g.Cells(int(reg.Front))
+	pal := g.Palette()
+	img, err := Map(&ground, &front, g.Blocks(reg), g.Metatiles(reg), g.Tiles(reg), pal, "ground", 4, false)
 	if err != nil || img.Bounds().Dx() != 1536 {
 		t.Fatalf("Map: %v, %v", img.Bounds(), err)
 	}
@@ -35,20 +35,20 @@ func TestMap(t *testing.T) {
 		{"sky", 4, `plane must be ground, front or both, not "sky"`},
 		{"ground", 3, "scale must be 1, 2 or 4, not 3"},
 	} {
-		if _, err := Map(&ground, &front, r.Blocks(reg), r.Metatiles(reg), r.Tiles(reg), pal, c.plane, c.scale, false); err == nil || err.Error() != c.want {
+		if _, err := Map(&ground, &front, g.Blocks(reg), g.Metatiles(reg), g.Tiles(reg), pal, c.plane, c.scale, false); err == nil || err.Error() != c.want {
 			t.Errorf("Map(%q, %d) = %v, want %q", c.plane, c.scale, err, c.want)
 		}
 	}
 }
 
 func TestMapScaleAndPlanes(t *testing.T) {
-	r := romtest.New()
+	g := romtest.Game()
 	reg := romtest.Region
-	ground, front := r.Cells(reg.Ground), r.Cells(reg.Front)
-	pal := r.Palette()
+	ground, front := g.Cells(int(reg.Ground)), g.Cells(int(reg.Front))
+	pal := g.Palette()
 	draw := func(plane string, scale int, solid bool) *image.NRGBA {
 		t.Helper()
-		img, err := Map(&ground, &front, r.Blocks(reg), r.Metatiles(reg), r.Tiles(reg), pal, plane, scale, solid)
+		img, err := Map(&ground, &front, g.Blocks(reg), g.Metatiles(reg), g.Tiles(reg), pal, plane, scale, solid)
 		if err != nil {
 			t.Fatal(err)
 		}

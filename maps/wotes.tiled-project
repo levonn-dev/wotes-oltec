@@ -33,6 +33,54 @@
             ]
         },
         {
+            "color": "#ff40a0ff",
+            "drawFill": true,
+            "id": 6,
+            "members": [
+            ],
+            "name": "Entry",
+            "type": "class",
+            "useAs": [
+                "object"
+            ]
+        },
+        {
+            "color": "#ffff8000",
+            "drawFill": true,
+            "id": 7,
+            "members": [
+            ],
+            "name": "Event",
+            "type": "class",
+            "useAs": [
+                "object"
+            ]
+        },
+        {
+            "color": "#ffffd040",
+            "drawFill": true,
+            "id": 8,
+            "members": [
+            ],
+            "name": "Item",
+            "type": "class",
+            "useAs": [
+                "object"
+            ]
+        },
+        {
+            "color": "#ffff4040",
+            "drawFill": true,
+            "id": 9,
+            "members": [
+            ],
+            "name": "Monster",
+            "type": "class",
+            "useAs": [
+                "object"
+            ]
+        },
+        {
             "color": "#ff40c040",
             "drawFill": true,
             "id": 4,
@@ -51,6 +99,18 @@
             "members": [
             ],
             "name": "Place",
+            "type": "class",
+            "useAs": [
+                "object"
+            ]
+        },
+        {
+            "color": "#ff40c040",
+            "drawFill": false,
+            "id": 10,
+            "members": [
+            ],
+            "name": "Spawn",
             "type": "class",
             "useAs": [
                 "object"

@@ -35,25 +35,27 @@ func objects(r rom.ROM) {
 	places(r)
 	npcs(r)
 	encounters(r)
+	spawns(r)
 }
 
 // Entrances: 0 the valley at (0x100, 0x200), level 0, map 2, flag 0xF7, entry 0; 1 the same region and
 // position opening map 0x0C, so unreachable; 2 a filler; 3 the swamp at (0x300, 0x400), level 2, map 2,
 // entry 1. Monster names for ids 0x74 and 0x83, padded the way the ROM pads them.
 func entrances(r rom.ROM) {
+	exits, points, names := int(rom.Clean.Entrances.Regions), int(rom.Clean.Entrances.Points), int(rom.Clean.Monsters.Names)
 	for i, region := range []int{1, 1, 1, 3} {
-		r[rom.RegionExits+i] = byte(region)
+		r[exits+i] = byte(region)
 	}
-	r[rom.RegionExits+4] = 0xFF
+	r[exits+4] = 0xFF
 	records := [][6]int{{0x100, 0x200, 0, 2, 0xF7, 0}, {0x100, 0x200, 0, 0x0C, 0, 0}, {0, 0, 63, rom.FillerMap, 63, 63}, {0x300, 0x400, 2, 2, 0, 1}}
 	for i, rec := range records {
-		p := rom.RegionExitPoints + 8*i
+		p := points + 8*i
 		put16(r, p, rec[0])
 		put16(r, p+2, rec[1])
 		r[p+4], r[p+5], r[p+6], r[p+7] = byte(rec[2]), byte(rec[3]), byte(rec[4]), byte(rec[5])
 	}
-	putStr(r, rom.MonsterNames+32*0x74, "HAIRY BEASTMAN  ")
-	putStr(r, rom.MonsterNames+32*0x83, "LIZARD MAN")
+	putStr(r, names+32*0x74, "HAIRY BEASTMAN  ")
+	putStr(r, names+32*0x83, "LIZARD MAN")
 }
 
 // Where the synthetic speech tables, texts and shop titles sit.
@@ -77,23 +79,25 @@ const (
 // (action 21, one line, no punctuation); levels 2 to 4 hold nothing.
 // Graveyard: a stone without a text, a stone naming member -1, a stone with a one-line epitaph.
 func places(r rom.ROM) {
+	pt := rom.Clean.Places
+	table, index, speeches, titles, graves := int(pt.Table), int(pt.SpeechIndex), int(pt.Speeches), int(pt.ShopTitles), int(pt.Graveyard)
 	records := [][6]int{{0x1000, 0x1048, 0xB20, 0xB68, 3, 0}, {0xDF0, 0xDF0, 0xB38, 0xB68, 3, 3}, {0x3F0, 0x430, 0x178, 0x1C0, 4, 12},
 		{0xAA0, 0xBE0, 0x4A0, 0x5A8, 4, 9}, {0xFA0, 0xFA8, 0xC38, 0xC50, 3, 21}}
 	for i, rec := range records {
-		p := rom.SpecialPlaces + 10*i
+		p := table + 10*i
 		for k := 0; k < 4; k++ {
 			put16(r, p+2*k, rec[k])
 		}
 		r[p+8], r[p+9] = byte(rec[4]), byte(rec[5])
 	}
-	for i := 0; i < rom.ActionCount; i++ {
-		r[rom.SpeechIndex+i] = 0xFF
+	for i := 0; i < pt.Actions; i++ {
+		r[index+i] = 0xFF
 	}
-	r[rom.SpeechIndex+3], r[rom.SpeechIndex+21] = 4, 6
-	put32(r, rom.CitySpeeches, speechTable0)
-	put32(r, rom.CitySpeeches+4, speechTable1)
-	for level := 2; level < rom.GameLevels; level++ {
-		put32(r, rom.CitySpeeches+4*level, speechTableNone)
+	r[index+3], r[index+21] = 4, 6
+	put32(r, speeches, speechTable0)
+	put32(r, speeches+4, speechTable1)
+	for level := 2; level < pt.Levels; level++ {
+		put32(r, speeches+4*level, speechTableNone)
 	}
 	put16(r, speechTable0, 8)
 	put16(r, speechTable0+2, 8)
@@ -107,46 +111,55 @@ func places(r rom.ROM) {
 	putText(r, textToll, false, "THE BRIDGE TOLL WENT UP", "AGAIN.")
 	putText(r, textGeese, true, "MIND THE GEESE BY THE WELL")
 	for i, title := range []string{"ARMOR SHOP", "WEAPON SHOP", "MAGIC SHOP", "CARAVAN SHOP"} {
-		put32(r, rom.ShopTitles+4*i, shopTitle+16*i)
+		put32(r, titles+4*i, shopTitle+16*i)
 		putStr(r, shopTitle+16*i, title)
 	}
 	stones := [][3]int{{0xCD0, 0xF88, 0}, {0xD00, 0xFB8, -1}, {0xD30, 0xFD0, textCellar}}
 	for i, s := range stones {
-		p := rom.Graveyard + 8*i
+		p := graves + 8*i
 		put16(r, p, s[0])
 		put16(r, p+2, s[1])
 		put32(r, p+4, s[2]&0xFFFFFFFF)
 	}
-	put32(r, rom.Graveyard+8*len(stones), 0xFFFFFFFF)
+	put32(r, graves+8*len(stones), 0xFFFFFFFF)
 	putText(r, textCellar, true, "GONE TO SEEK A DRIER CELLAR.")
 }
 
 // Figures: 0 (12 tiles) all colour 1, 1 all colour 2, 3 all colour 3 (the second block), 12 all colour 4 (the last block), the rest blank. Figure records: 0 always,
 // at (0xB40, 0x1010) inside ARMOR SHOP, figure 0; 1 pacing east-west, slot 1, figure 3; 2 shown by flag
-// bit 2, figure 12, offsets 0; 3 random, slot 4, figure 1 with palette bits in its attribute; 4 pacing
+// bit 2, figure 12, offsets 0; 3 random, slot 4, figure 1 with palette bits in its attribute, drawn in front; 4 pacing
 // north-south, slot 2, figure 5. Ten townsfolk spots along y 0xF38.
 func npcs(r rom.ROM) {
+	l := &rom.Clean
+	base, spots := int(l.Figures.Records), int(l.Figures.Spots)
 	for i := 0; i < 12; i++ {
-		putTile(r, rom.FigureSource(rom.FigureTile(0)+i), 0, func(int) byte { return 1 })
+		putTile(r, l.FigureSource(l.FigureTile(0)+i), 0, func(int) byte { return 1 })
 	}
 	for i := 0; i < 9; i++ {
-		putTile(r, rom.FigureSource(rom.FigureTile(1)+i), 0, func(int) byte { return 2 })
-		putTile(r, rom.FigureSource(rom.FigureTile(3)+i), 0, func(int) byte { return 3 })
-		putTile(r, rom.FigureSource(rom.FigureTile(12)+i), 0, func(int) byte { return 4 })
+		putTile(r, l.FigureSource(l.FigureTile(1)+i), 0, func(int) byte { return 2 })
+		putTile(r, l.FigureSource(l.FigureTile(3)+i), 0, func(int) byte { return 3 })
+		putTile(r, l.FigureSource(l.FigureTile(12)+i), 0, func(int) byte { return 4 })
 	}
-	type record struct{ x, y, routine, slot, yoff, size, attr, xoff int }
+	type record struct {
+		x, y, routine, slot, yoff, size, attr, xoff int
+		front                                       bool
+	}
 	records := []record{
-		{0xB40, 0x1010, rom.NPCAlways, 0, -8, rom.WideSize, rom.FigureTile(0), -12},
-		{0x100, 0x100, rom.NPCPacesX, 1, -8, 0x0A00, rom.FigureTile(3), -8},
-		{0x200, 0x100, rom.NPCFlagBit2, 0, 0, 0x0A00, rom.FigureTile(12), 0},
-		{0x300, 0x100, rom.NPCRandom, 4, -8, 0x0A00, 0x8000 | rom.FigureTile(1), -8},
-		{0x400, 0x100, rom.NPCPacesY, 2, -8, 0x0A00, rom.FigureTile(5), -8},
+		{0xB40, 0x1010, rom.NPCAlways, 0, -8, rom.WideSize, l.FigureTile(0), -12, false},
+		{0x100, 0x100, rom.NPCPacesX, 1, -8, 0x0A00, l.FigureTile(3), -8, false},
+		{0x200, 0x100, rom.NPCFlagBit2, 0, 0, 0x0A00, l.FigureTile(12), 0, false},
+		{0x300, 0x100, rom.NPCRandom, 4, -8, 0x0A00, 0x8000 | l.FigureTile(1), -8, true},
+		{0x400, 0x100, rom.NPCPacesY, 2, -8, 0x0A00, l.FigureTile(5), -8, false},
 	}
 	for i, n := range records {
-		p := rom.CityNPCs + rom.NPCRecordSize*i
+		p := base + rom.NPCRecordSize*i
 		put16(r, p, n.x)
 		put16(r, p+2, n.y)
-		put32(r, p+4, 0x2000)
+		param := 0x2000
+		if n.front {
+			param |= 0x80000000
+		}
+		put32(r, p+4, param)
 		put32(r, p+8, n.routine)
 		put16(r, p+12, n.slot)
 		put16(r, p+16, 8)
@@ -157,7 +170,7 @@ func npcs(r rom.ROM) {
 		put16(r, p+26, n.xoff&0xFFFF)
 	}
 	for i, figure := range []int{1, 2, 3, 2, 2, 0, 2, 2, 3, 1} {
-		p := rom.TownsfolkSpots + 6*i
+		p := spots + 6*i
 		r[p] = byte(figure)
 		put16(r, p+2, 0x9F0+0x10*i)
 		put16(r, p+4, 0xF38)
@@ -167,15 +180,16 @@ func npcs(r rom.ROM) {
 // Fixed fights: the valley's 2 to 3 hairy beastmen at (0x8FC, 0x900) with three positions; the swamp's
 // 2 lizard men at (0x710, 0x190). A negative word ends the table.
 func encounters(r rom.ROM) {
-	put16(r, rom.FixedEncounters, 1)
-	put16(r, rom.FixedEncounters+2, 0x8FC)
-	put16(r, rom.FixedEncounters+4, 0x900)
-	put32(r, rom.FixedEncounters+6, 0x165C0)
-	put16(r, rom.FixedEncounters+10, 3)
-	put16(r, rom.FixedEncounters+12, 0x710)
-	put16(r, rom.FixedEncounters+14, 0x190)
-	put32(r, rom.FixedEncounters+16, 0x165E0)
-	put16(r, rom.FixedEncounters+20, 0xFFFF)
+	table := int(rom.Clean.Fights.Table)
+	put16(r, table, 1)
+	put16(r, table+2, 0x8FC)
+	put16(r, table+4, 0x900)
+	put32(r, table+6, 0x165C0)
+	put16(r, table+10, 3)
+	put16(r, table+12, 0x710)
+	put16(r, table+14, 0x190)
+	put32(r, table+16, 0x165E0)
+	put16(r, table+20, 0xFFFF)
 	r[0x165C0], r[0x165C1] = 0x23, 0x74
 	for i, pos := range [][2]int{{0x908, 0x990}, {0x978, 0x998}, {0x918, 0x950}} {
 		put16(r, 0x165C2+4*i, pos[0])
@@ -185,5 +199,32 @@ func encounters(r rom.ROM) {
 	for i, pos := range [][2]int{{0x638, 0x180}, {0x658, 0x138}} {
 		put16(r, 0x165E2+4*i, pos[0])
 		put16(r, 0x165E4+4*i, pos[1])
+	}
+}
+
+// Where the synthetic random-encounter lists sit.
+const (
+	spawnListField = 0x12B3A
+	spawnListGrove = 0x12B5A
+	spawnListSwamp = 0x12C5A
+)
+
+// Random encounters: terrain 1 everywhere but cells (0, 0) and (1, 0), terrain 0, and (4, 4), (5, 4), (4, 5), terrain 2.
+// Terrain 1 rolls eight different entries, 2 eight of 1 to 2 lizard men, 10 eight of 2 to 8 with affinity 1.
+func spawns(r rom.ROM) {
+	terrain, lists := int(rom.Clean.Spawns.Terrain), int(rom.Clean.Spawns.Lists)
+	for i := 0; i < 1024; i++ {
+		r[terrain+i] = 1
+	}
+	r[terrain], r[terrain+1] = 0, 0
+	r[terrain+4*32+4], r[terrain+4*32+5], r[terrain+5*32+4] = 2, 2, 2
+	put32(r, lists+4*1, spawnListField)
+	put32(r, lists+4*2, spawnListGrove)
+	put32(r, lists+4*10, spawnListSwamp)
+	field := [][4]byte{{0x74, 0x26, 1, 1}, {0x83, 0x13, 1, 0}, {0x62, 0x14, 0, 5}, {0x74, 0x11, 1, 0}, {0x83, 0x2C, 1, 2}, {0x74, 0x3F, 1, 4}, {0x83, 0x11, 1, 0}, {0x74, 0x12, 1, 3}}
+	for i, e := range field {
+		copy(r[spawnListField+4*i:], e[:])
+		copy(r[spawnListGrove+4*i:], []byte{0x83, 0x12, 1, 0})
+		copy(r[spawnListSwamp+4*i:], []byte{0x83, 0x28, 1, 1})
 	}
 }

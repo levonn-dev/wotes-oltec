@@ -62,16 +62,6 @@ func baseWords(base string, g GenMeta) (m rom.Metatile, ok bool) {
 	return m, true
 }
 
-// allPrio reports a metatile whose nine tiles all carry priority.
-func allPrio(g GenMeta) bool {
-	for _, t := range g {
-		if !t.Prio {
-			return false
-		}
-	}
-	return true
-}
-
 // planeCells is both planes' metatile index per 24-pixel cell.
 type planeCells [2][extract.MapSize * extract.MapSize]uint16
 
@@ -188,17 +178,25 @@ func (c *converter) resolveCells(mapPath string, infos []*tilesetInfo, ll *landL
 		baseIndex[baseMetas[i]] = i
 	}
 	before := len(reg.list)
+	// The solid layer is the ground's whole blocking: a cell blocks the tiles its pattern marks and no others.
 	for i, g := range ll.solid {
-		if g == 0 {
-			continue
-		}
 		x, y := i%extract.MapSize, i/extract.MapSize
-		info, local, _, _, err := lookup(infos, g)
-		if err != nil {
-			return nil, cellErr(mapPath, extract.LayerSolid, x, y, "%v", err)
-		}
-		if info.kind != extract.KindFlags || local != extract.FlagSolid {
-			return nil, cellErr(mapPath, extract.LayerSolid, x, y, "only the solid marker from the flags tileset goes on this layer")
+		var mask int
+		if g != 0 {
+			info, local, h, v, err := lookup(infos, g)
+			if err != nil {
+				return nil, cellErr(mapPath, extract.LayerSolid, x, y, "%v", err)
+			}
+			switch {
+			case info.kind == extract.KindFlags && local == extract.FlagSolid:
+				mask = extract.SolidAll
+			case info.kind == extract.KindSolid && (h || v):
+				return nil, cellErr(mapPath, extract.LayerSolid, x, y, "a flipped pattern; paint the pattern that marks the tiles you mean")
+			case info.kind == extract.KindSolid:
+				mask = local
+			default:
+				return nil, cellErr(mapPath, extract.LayerSolid, x, y, "only the solid marker from the flags tileset or a pattern from the solid tileset goes on this layer")
+			}
 		}
 		idx := int(cells[0][i])
 		var cur GenMeta
@@ -207,15 +205,16 @@ func (c *converter) resolveCells(mapPath string, infos []*tilesetInfo, ll *landL
 		} else {
 			cur = reg.list[idx-reg.baseCount]
 		}
-		if allPrio(cur) {
-			continue
-		}
 		variant := cur
 		for k := range variant {
-			if variant[k].Blank() {
+			blocks := mask&(1<<k) != 0
+			if blocks && variant[k].Blank() {
 				variant[k] = TileRef{Region: c.base.Name}
 			}
-			variant[k].Prio = true
+			variant[k].Prio = blocks
+		}
+		if variant == cur {
+			continue
 		}
 		if words, ok := baseWords(c.base.Name, variant); ok {
 			if j, found := baseIndex[words]; found {

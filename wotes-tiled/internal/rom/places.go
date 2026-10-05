@@ -2,17 +2,18 @@ package rom
 
 import "fmt"
 
-// The outdoor special places and the texts their actions show.
+// Limits on how far a table without an end is walked before the reader gives up.
 const (
-	SpecialPlaces  = 0xD3E4 // records of y0, y1, x0, x1 words, a level byte and an action byte; a zero word ends
-	ActionCount    = 35
 	PlaceLimit     = 64
-	SpeechIndex    = 0xDBA0  // one byte per action: the text's word offset in a level's speech table, 0xFF for none
-	CitySpeeches   = 0xFAF14 // five longs, one speech table per game level
-	GameLevels     = 5
-	ShopTitles     = 0xC55E // four longs to the shop titles
-	Graveyard      = 0xD7CE // records of a position long and a text long; a negative position ends
 	GraveyardLimit = 64
+)
+
+// Record and entry sizes of the place tables.
+const (
+	placeRecord = 10 // y0, y1, x0, x1 words, a level byte and an action byte
+	graveRecord = 8  // a position long and a text long
+	pointerSize = 4  // a long to a text or a table
+	ShopCount   = 4
 )
 
 // Place is one special-place record: a party-pixel rectangle, inclusive on both ends, that fires its
@@ -24,19 +25,23 @@ type Place struct {
 }
 
 // Places reads the special-place table.
-func (r ROM) Places() ([]Place, error) {
+func (g *Game) Places() ([]Place, error) {
+	table, actions := int(g.Layout.Places.Table), g.Layout.Places.Actions
 	var out []Place
 	for i := 0; ; i++ {
-		p := SpecialPlaces + 10*i
-		if r.U16(p) == 0 {
+		p := table + placeRecord*i
+		if p+placeRecord > len(g.ROM) {
+			return nil, fmt.Errorf("rom_special_places record %d runs past the ROM's end", i)
+		}
+		if g.U16(p) == 0 {
 			return out, nil
 		}
 		if i >= PlaceLimit {
 			return nil, fmt.Errorf("rom_special_places has no zero end within %d records", PlaceLimit)
 		}
-		pl := Place{Index: i, Y0: int(r.U16(p)), Y1: int(r.U16(p + 2)), X0: int(r.U16(p + 4)), X1: int(r.U16(p + 6)), Level: int(r[p+8]), Action: int(int8(r[p+9]))}
-		if pl.Action < 0 || pl.Action >= ActionCount {
-			return nil, fmt.Errorf("rom_special_places record %d: action %d is outside the %d actions", i, pl.Action, ActionCount)
+		pl := Place{Index: i, Y0: int(g.U16(p)), Y1: int(g.U16(p + 2)), X0: int(g.U16(p + 4)), X1: int(g.U16(p + 6)), Level: int(g.ROM[p+8]), Action: int(int8(g.ROM[p+9]))}
+		if pl.Action < 0 || pl.Action >= actions {
+			return nil, fmt.Errorf("rom_special_places record %d: action %d is outside the %d actions", i, pl.Action, actions)
 		}
 		if pl.X1 < pl.X0 || pl.Y1 < pl.Y0 {
 			return nil, fmt.Errorf("rom_special_places record %d: the rectangle x %#x-%#x, y %#x-%#x is inside out", i, pl.X0, pl.X1, pl.Y0, pl.Y1)
@@ -46,22 +51,30 @@ func (r ROM) Places() ([]Place, error) {
 }
 
 // Speech is the text a special-place action shows at a game level, or nil when it has none there.
-func (r ROM) Speech(level, action int) ([]string, error) {
-	if level < 0 || level >= GameLevels || action < 0 || action >= ActionCount {
-		return nil, fmt.Errorf("speech: level %d, action %d: outside %d levels and %d actions", level, action, GameLevels, ActionCount)
+func (g *Game) Speech(level, action int) ([]string, error) {
+	pt := g.Layout.Places
+	if level < 0 || level >= pt.Levels || action < 0 || action >= pt.Actions {
+		return nil, fmt.Errorf("speech: level %d, action %d: outside %d levels and %d actions", level, action, pt.Levels, pt.Actions)
 	}
-	b := int(r[SpeechIndex+action])
+	if int(pt.SpeechIndex)+action >= len(g.ROM) {
+		return nil, fmt.Errorf("rom_speech_index entry %d is past the ROM's end", action)
+	}
+	b := int(g.ROM[int(pt.SpeechIndex)+action])
 	if b == 0xFF {
 		return nil, nil
 	}
-	tbl := int(r.U32(CitySpeeches + 4*level))
-	if tbl+b+2 > len(r) {
+	entry := int(pt.Speeches) + pointerSize*level
+	if entry+pointerSize > len(g.ROM) {
+		return nil, fmt.Errorf("rom_city_speeches entry %d runs past the ROM's end", level)
+	}
+	tbl := int(g.U32(entry))
+	if tbl+b+2 > len(g.ROM) {
 		return nil, fmt.Errorf("speech table for level %d at %#x is outside the ROM", level, tbl)
 	}
-	if b >= int(r.U16(tbl)) {
+	if b >= int(g.U16(tbl)) {
 		return nil, nil
 	}
-	lines, err := r.Message(tbl + int(r.U16(tbl+b)))
+	lines, err := g.Message(tbl + int(g.U16(tbl+b)))
 	if err != nil {
 		return nil, fmt.Errorf("speech table for level %d, action %d: %v", level, action, err)
 	}
@@ -69,7 +82,16 @@ func (r ROM) Speech(level, action int) ([]string, error) {
 }
 
 // ShopTitle is the title of shop i, 0 to 3.
-func (r ROM) ShopTitle(i int) string { return r.CString(int(r.U32(ShopTitles + 4*i))) }
+func (g *Game) ShopTitle(i int) (string, error) {
+	if i < 0 || i >= ShopCount {
+		return "", fmt.Errorf("shop %d is outside the %d shops", i, ShopCount)
+	}
+	p := int(g.Layout.Places.ShopTitles) + pointerSize*i
+	if p+pointerSize > len(g.ROM) {
+		return "", fmt.Errorf("rom_shop_titles entry %d runs past the ROM's end", i)
+	}
+	return g.CString(int(g.U32(p))), nil
+}
 
 // Gravestone is one stone of the castle graveyard.
 type Gravestone struct {
@@ -79,30 +101,34 @@ type Gravestone struct {
 }
 
 // Gravestones reads the graveyard table, leaving out stones without a text.
-func (r ROM) Gravestones() ([]Gravestone, error) {
+func (g *Game) Gravestones() ([]Gravestone, error) {
+	table := int(g.Layout.Places.Graveyard)
 	var out []Gravestone
 	for i := 0; ; i++ {
-		p := Graveyard + 8*i
-		if int32(r.U32(p)) < 0 {
+		p := table + graveRecord*i
+		if p+graveRecord > len(g.ROM) {
+			return nil, fmt.Errorf("rom_graveyard record %d runs past the ROM's end", i)
+		}
+		if int32(g.U32(p)) < 0 {
 			return out, nil
 		}
 		if i >= GraveyardLimit {
 			return nil, fmt.Errorf("rom_graveyard has no end within %d records", GraveyardLimit)
 		}
-		text := int32(r.U32(p + 4))
-		g := Gravestone{X: int(r.U16(p)), Y: int(r.U16(p + 2))}
+		text := int32(g.U32(p + 4))
+		gs := Gravestone{X: int(g.U16(p)), Y: int(g.U16(p + 2))}
 		switch {
 		case text == 0:
 			continue
 		case text < 0:
-			g.Member = int(text)
+			gs.Member = int(text)
 		default:
-			lines, err := r.Message(int(text))
+			lines, err := g.Message(int(text))
 			if err != nil {
 				return nil, fmt.Errorf("rom_graveyard record %d: %v", i, err)
 			}
-			g.Text = lines
+			gs.Text = lines
 		}
-		out = append(out, g)
+		out = append(out, gs)
 	}
 }

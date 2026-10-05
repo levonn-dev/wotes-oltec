@@ -49,7 +49,7 @@ func (c *converter) loadTilesets(m *tiled.Map, mapPath string) ([]*tilesetInfo, 
 			if _, err := c.region(info.region); err != nil {
 				return nil, fmt.Errorf("%s: tileset %s: %v", mapPath, ref.Source, err)
 			}
-		case extract.KindFlags, extract.KindFigures:
+		case extract.KindFlags, extract.KindSolid, extract.KindFigures, extract.KindSides:
 		case extract.KindProject:
 			return nil, fmt.Errorf("%s: tileset %s: the project tileset of %s is %s", mapPath, ref.Source, name, projectSource)
 		case "":

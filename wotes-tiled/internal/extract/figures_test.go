@@ -12,9 +12,9 @@ import (
 )
 
 func TestFiguresImage(t *testing.T) {
-	r := romtest.New()
-	pal := r.Palette()
-	img := Figures(r, pal)
+	g := romtest.Game()
+	pal := g.Palette()
+	img := Figures(g, pal)
 	if img.Bounds().Dx() != rom.FigureCount*FigureWidth || img.Bounds().Dy() != FigureHeight {
 		t.Fatalf("image is %v", img.Bounds())
 	}
@@ -37,8 +37,8 @@ func TestFiguresImage(t *testing.T) {
 
 func TestWriteFigures(t *testing.T) {
 	dir := t.TempDir()
-	r := romtest.New()
-	if err := WriteFigures(r, r.Palette(), dir); err != nil {
+	g := romtest.Game()
+	if err := WriteFigures(g, g.Palette(), dir); err != nil {
 		t.Fatal(err)
 	}
 	ts, err := tiled.ReadTileset(filepath.Join(dir, FiguresName+".tsj"))
