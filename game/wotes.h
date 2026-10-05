@@ -24,7 +24,7 @@ extern volatile uint8_t ram_region;
 extern volatile uint16_t ram_region_area;
 void game_load_region(void);          /* the packed map x,y it moves the party to is passed in d0, so a C caller has to load d0 with inline asm */
 void game_load_region_tiles(void);
-void game_load_region_monsters(void); /* the monster list index is passed in d0, so a C caller has to load d0 with inline asm */
+void game_load_region_animations(void); /* the animated-tile list index is passed in d0, so a C caller has to load d0 with inline asm */
 
 /* rom_region_table keeps one column per field rather than one record per region, so the whole
  * table is a single struct and every column is indexed by ram_region. */
@@ -34,7 +34,7 @@ struct region_table {
     uint32_t blocks[4];   /* 0x80-byte blocks of tile indices the map words select */
     uint32_t tiles[4];    /* the tile words a block entry resolves to */
     uint16_t area[4];     /* what game_load_region stores in ram_region_area */
-    uint16_t monsters[4]; /* which list game_load_region_monsters loads */
+    uint16_t animations[4]; /* which animated-tile list game_load_region_animations loads */
 };
 _Static_assert(sizeof(struct region_table) == 0x50, "region_table overlays the whole region table");
 extern const struct region_table rom_region_table;
