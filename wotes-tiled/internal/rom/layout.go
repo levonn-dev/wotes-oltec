@@ -111,13 +111,18 @@ type MonsterTables struct {
 type ItemTables struct {
 	Records Addr `json:"records"` // 16 bytes per item, from id 1; byte 1 indexes the name table
 	Names   Addr `json:"names"`   // word offsets from the table's own address to NUL-terminated names
+	Count   int  `json:"count"`   // items, the last id
 }
+
+// lastFlag is the last event flag a record may name: bit 0xFF is what an item's 0xFF gate falls through to.
+const lastFlag = 0xFE
 
 // DungeonTables: the dungeon maps.
 type DungeonTables struct {
 	MapTable  Addr         `json:"mapTable"`  // 12-byte records: style, graphics and packed grid pointers
 	Directory Addr         `json:"directory"` // a count word, then offsets to each map's object list and to each map's text table, relative to the directory
 	Stairs    StairsTable  `json:"stairs"`
+	Flags     FlagRange    `json:"flags"`
 	Styles    []StyleEntry `json:"styles"` // every look a map may point at
 	Pieces    PieceTables  `json:"pieces"`
 	Names     []string     `json:"names"` // one per map, in ram_map order
@@ -127,6 +132,12 @@ type DungeonTables struct {
 type StairsTable struct {
 	Table Addr `json:"table"` // 4-byte records: destination map word, forward entry byte, back entry byte
 	Count int  `json:"count"`
+}
+
+// FlagRange: the event flags no record or routine of the game uses, which new levels may gate on and set.
+type FlagRange struct {
+	First Addr `json:"first"`
+	Last  Addr `json:"last"`
 }
 
 // StyleEntry names one look of the dungeon maps and its descriptor.
@@ -160,8 +171,8 @@ var Clean = Layout{
 	Fights:   FightTables{Table: 0x165A0},
 	Spawns:   SpawnTables{Terrain: 0xBEB6E, Lists: 0x12D9C, Terrains: 13},
 	Monsters: MonsterTables{Names: 0x3D30C},
-	Items:    ItemTables{Records: 0x3E58C, Names: 0x4FAD2},
-	Dungeons: DungeonTables{MapTable: 0x1145C, Directory: 0xD5E36, Stairs: StairsTable{Table: 0x10D0A, Count: 13},
+	Items:    ItemTables{Records: 0x3E58C, Names: 0x4FAD2, Count: 235},
+	Dungeons: DungeonTables{MapTable: 0x1145C, Directory: 0xD5E36, Stairs: StairsTable{Table: 0x10D0A, Count: 13}, Flags: FlagRange{First: 0x44, Last: 0xF6},
 		Styles: []StyleEntry{{Name: "cave", Descriptor: 0x11624}, {Name: "azcan", Descriptor: 0x1162E}, {Name: "stone", Descriptor: 0x11638}, {Name: "elven", Descriptor: 0x11642}},
 		Pieces: PieceTables{Table: 0x1028C, Sizes: 0x102A6, Count: 12},
 		Names: []string{
@@ -328,9 +339,10 @@ func (l *Layout) fields() []field {
 	f = append(f, at("fights.table", l.Fights.Table, encounterRecord),
 		at("spawns.terrain", l.Spawns.Terrain, len(Cells{})), at("spawns.lists", l.Spawns.Lists, pointerSize*l.Spawns.Terrains), num("spawns.terrains", l.Spawns.Terrains),
 		at("monsters.names", l.Monsters.Names, 0),
-		at("items.records", l.Items.Records, 0), at("items.names", l.Items.Names, 0),
+		at("items.records", l.Items.Records, itemRecord*l.Items.Count), at("items.names", l.Items.Names, 0), num("items.count", l.Items.Count),
 		at("dungeons.mapTable", l.Dungeons.MapTable, mapRecord*len(l.Dungeons.Names)), at("dungeons.directory", l.Dungeons.Directory, dirCount),
-		at("dungeons.stairs.table", l.Dungeons.Stairs.Table, stairRecord*l.Dungeons.Stairs.Count), num("dungeons.stairs.count", l.Dungeons.Stairs.Count))
+		at("dungeons.stairs.table", l.Dungeons.Stairs.Table, stairRecord*l.Dungeons.Stairs.Count), num("dungeons.stairs.count", l.Dungeons.Stairs.Count),
+		num("dungeons.flags.first", int(l.Dungeons.Flags.First)), num("dungeons.flags.last", int(l.Dungeons.Flags.Last)))
 	for i, s := range l.Dungeons.Styles {
 		f = append(f, at(fmt.Sprintf("dungeons.styles[%d].descriptor", i), s.Descriptor, styleRecord))
 	}
@@ -368,6 +380,9 @@ func (l *Layout) Check() error {
 		if n == "" {
 			return fmt.Errorf("layout: dungeons.names[%d] is empty", i)
 		}
+	}
+	if f := l.Dungeons.Flags; f.First > f.Last || f.Last > lastFlag {
+		return fmt.Errorf("layout: dungeons.flags runs 0x%X to 0x%X; it must lie in 1 to 0x%X, first before last", int(f.First), int(f.Last), lastFlag)
 	}
 	if len(l.Dungeons.Styles) == 0 {
 		return fmt.Errorf("layout: dungeons.styles is empty")

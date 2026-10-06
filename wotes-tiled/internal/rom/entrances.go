@@ -13,7 +13,7 @@ type Entrance struct {
 	Index       int  // the record's position in both tables
 	Region      int  // the ram_region value the entrance belongs to
 	X, Y        int  // in party pixels
-	Level       int  // the highest ram_game_level admitted
+	Level       int  // the least ram_game_level that may enter
 	Map, Entry  int  // the dungeon map and its entry point
 	Flag        int  // the event flag set on entry, 0 for none
 	Unreachable bool // an earlier record has the same region and position and is taken first
@@ -69,4 +69,18 @@ func (g *Game) EntranceAt(i int) (Entrance, error) {
 		}
 	}
 	return Entrance{Index: i, Region: int(g.ROM[exits+i]), X: int(g.U16(p)), Y: int(g.U16(p + 2)), Level: int(g.ROM[p+4]), Map: int(g.ROM[p+5]), Flag: int(g.ROM[p+6]), Entry: int(g.ROM[p+7])}, nil
+}
+
+// EntranceCount counts the records the entrance tables hold, fillers included.
+func (g *Game) EntranceCount() (int, error) {
+	exits, limit := int(g.Layout.Entrances.Regions), g.Layout.Entrances.Count
+	for i := 0; i <= limit; i++ {
+		if exits+i >= len(g.ROM) {
+			return 0, fmt.Errorf("rom_region_exits record %d runs past the ROM's end", i)
+		}
+		if g.ROM[exits+i] == 0xFF {
+			return i, nil
+		}
+	}
+	return 0, fmt.Errorf("rom_region_exits has no 0xFF end within %d records", limit)
 }

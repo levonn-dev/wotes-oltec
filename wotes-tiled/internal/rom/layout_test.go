@@ -20,7 +20,8 @@ func TestCleanLayout(t *testing.T) {
 	if l.Entrances.Regions != 0x10416 || l.Entrances.Points != 0x104EC || l.Entrances.Count != 40 || l.Places.Table != 0xD3E4 || l.Places.Actions != 35 || l.Places.Levels != 5 ||
 		l.Figures.Records != 0xE2FC || len(l.Figures.Chunks) != 4 || l.Figures.Chunks[3].Tile != 0x415 || l.Fights.Table != 0x165A0 || l.Monsters.Names != 0x3D30C ||
 		l.Spawns != (rom.SpawnTables{Terrain: 0xBEB6E, Lists: 0x12D9C, Terrains: 13}) ||
-		l.Items.Records != 0x3E58C || l.Items.Names != 0x4FAD2 || l.Dungeons.MapTable != 0x1145C || l.Dungeons.Directory != 0xD5E36 || l.Dungeons.Stairs.Table != 0x10D0A || l.Dungeons.Stairs.Count != 13 {
+		l.Items.Records != 0x3E58C || l.Items.Names != 0x4FAD2 || l.Dungeons.MapTable != 0x1145C || l.Dungeons.Directory != 0xD5E36 || l.Dungeons.Stairs.Table != 0x10D0A || l.Dungeons.Stairs.Count != 13 ||
+		l.Dungeons.Flags != (rom.FlagRange{First: 0x44, Last: 0xF6}) {
 		t.Fatalf("clean tables: %+v", l)
 	}
 	if len(l.Dungeons.Names) != 38 || l.Dungeons.Names[2] != "Gateway Passage" || l.Dungeons.Names[0x0E] != "Oltec Tradeway" || l.Dungeons.Names[0x07] != "Azcan Temple" || l.Dungeons.Names[0x25] != "The Halls of the Dead" {
@@ -127,6 +128,9 @@ func TestParseLayoutRejects(t *testing.T) {
 		{"empty style name", `"name": "elven"`, `"name": ""`, `dungeons.styles[3].name is missing`},
 		{"zero piece count", `"count": 12`, `"count": 0`, `dungeons.pieces.count is missing or zero`},
 		{"zero terrain count", `"terrains": 13`, `"terrains": 0`, `spawns.terrains is missing or zero`},
+		{"zero first flag", `"first": "0x44"`, `"first": "0x0"`, `dungeons.flags.first is missing or zero`},
+		{"flags the wrong way round", `"first": "0x44"`, `"first": "0xF7"`, `dungeons.flags runs 0xF7 to 0xF6`},
+		{"a flag past the last a record may name", `"last": "0xF6"`, `"last": "0xFF"`, `it must lie in 1 to 0xFE`},
 	}
 	for _, c := range cases {
 		s := strings.Replace(string(base), c.find, c.replace, 1)

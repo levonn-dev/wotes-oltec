@@ -58,3 +58,45 @@ func TestUnpackTooLong(t *testing.T) {
 		t.Fatalf("a stream longer than the ROM: %v", err)
 	}
 }
+
+func TestPackUnpacksToWhatWasPacked(t *testing.T) {
+	long := make([]byte, 700)
+	for i := range long {
+		long[i] = byte(i * 7)
+	}
+	cases := map[string][]byte{
+		"nothing":            {},
+		"one byte":           {9},
+		"four equal bytes":   {1, 1, 1, 1},
+		"five equal bytes":   {1, 1, 1, 1, 1},
+		"a run in literals":  append(append([]byte{3, 4}, make([]byte, 300)...), 5, 6, 7),
+		"more than 63 bytes": long,
+		"a grid":             append([]byte{3, 0, 2, 0, 4, 0}, romtest.Grid0...),
+	}
+	for name, raw := range cases {
+		packed, err := rom.Pack(raw)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		// Unpack refuses a block longer than its ROM, so the image is larger than any case.
+		r := make(rom.ROM, 0x1000)
+		copy(r[0x10:], packed)
+		got, err := r.Unpack(0x10)
+		if err != nil || string(got) != string(raw) {
+			t.Errorf("%s: Unpack(Pack) gives %d bytes, %v, want the %d packed", name, len(got), err, len(raw))
+		}
+	}
+}
+
+func TestPackWritesARunAsFourBytes(t *testing.T) {
+	packed, err := rom.Pack(make([]byte, 300))
+	if err != nil || string(packed) != string([]byte{0x01, 0x2C, 0xFE, 0x2C, 0x01, 0x00, 0x80}) {
+		t.Fatalf("Pack = % X, %v", packed, err)
+	}
+}
+
+func TestPackRefusesWhatTheCountWordCannotHold(t *testing.T) {
+	if _, err := rom.Pack(make([]byte, 0x10000)); err == nil || !strings.Contains(err.Error(), "65536 bytes do not fit") {
+		t.Fatalf("Pack = %v", err)
+	}
+}

@@ -15,6 +15,22 @@ const (
 	mapRecord    = 12  // style, graphics and packed grid longs
 	stairRecord  = 4   // a map word, forward and back entry bytes
 	dirCount     = 2   // the directory's count word
+	itemRecord   = 16  // an item's record; byte 1 indexes the name table
+)
+
+// What the engine's dungeon code can take, read from its work area and its loaders.
+const (
+	MaxGridTiles    = 1360 // the pickup texts' ring starts on the byte after a grid this long
+	MaxGridSide     = 64   // an object keeps its tile times four in a byte
+	MaxLevelObjects = 127  // the live slots a level's records are placed into
+	MaxEntryPoints  = 86   // from entry 86 the index's high byte lands in the party's x
+	MaxMonsterValue = 0x4F // from 0x50 a value names the outdoor roster, which has no corridor picture
+	MaxEntrances    = 128  // an exit is a signed byte: minus the entrance, minus one
+	MaxStairs       = 128  // a staircase's value runs 0 to 0x7F
+	MaxLevels       = 256  // an entrance record names its map in a byte
+	TextColumns     = 26   // characters the dungeon text box shows on a line
+	TextLines       = 9    // lines a text may have beside the ten the box keeps
+	LastGlyph       = 0x61 // the last byte the dungeon font has a tile for
 )
 
 // Object kinds, the low nibble of a record's kind byte.
@@ -220,8 +236,11 @@ func ExitEntrance(value int) int { return -int(int8(value)) - 1 }
 // ItemName is item id's name: byte 1 of its record indexes the name table's word offsets.
 func (g *Game) ItemName(id int) (string, error) {
 	it := g.Layout.Items
-	rec := int(it.Records) + 16*(id-1)
-	if id < 1 || rec+16 > len(g.ROM) {
+	rec := int(it.Records) + itemRecord*(id-1)
+	if id < 1 || id > it.Count {
+		return "", fmt.Errorf("item %#x: the game's items run 1 to %#x", id, it.Count)
+	}
+	if rec+itemRecord > len(g.ROM) {
 		return "", fmt.Errorf("item %#x: its record is outside the ROM", id)
 	}
 	names := int(it.Names)
@@ -234,4 +253,28 @@ func (g *Game) ItemName(id int) (string, error) {
 		return "", fmt.Errorf("item %#x has no name", id)
 	}
 	return name, nil
+}
+
+// DungeonLists is where the game keeps map m's object list and its text table; m must be one of its maps.
+func (g *Game) DungeonLists(m int) (list, texts int) {
+	dir := int(g.Layout.Dungeons.Directory)
+	count := int(g.U16(dir))
+	return dir + int(int32(g.U32(dir+dirCount+4*m))), dir + int(int32(g.U32(dir+dirCount+4*(count+m))))
+}
+
+// A battle type's roster record, and the byte of it that picks the corridor picture.
+const (
+	rosterRecord  = 32
+	rosterPicture = 0x18
+	MaxPictures   = 8 // the picture buffers a corridor view has
+)
+
+// MonsterPicture is the corridor picture a dungeon battle type is drawn with, 0 outside the ROM: the
+// roster byte less bit 7, which marks a monster of two pictures.
+func (g *Game) MonsterPicture(id int) int {
+	at := int(g.Layout.Monsters.Names) + rosterRecord*id + rosterPicture
+	if id < 0 || at >= len(g.ROM) {
+		return 0
+	}
+	return int(g.ROM[at] & 0x7F)
 }

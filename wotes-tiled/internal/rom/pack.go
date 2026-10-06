@@ -109,3 +109,42 @@ func (r ROM) unpack(off, p int) ([]byte, error) {
 		}
 	}
 }
+
+// What Pack writes: literals in runs of at most 63, and a run opcode for five or more equal bytes, which
+// its four bytes then beat.
+const (
+	maxLiteral = 63
+	minRun     = 5
+)
+
+// Pack encodes raw as a block Unpack and game_decompress read: the count word, then literals and byte
+// runs, then the end byte. It makes no back references.
+func Pack(raw []byte) ([]byte, error) {
+	if len(raw) > 0xFFFF {
+		return nil, fmt.Errorf("%d bytes do not fit a packed block's count word", len(raw))
+	}
+	out := []byte{byte(len(raw) >> 8), byte(len(raw))}
+	lit := 0 // the first byte not yet written
+	literals := func(end int) {
+		for lit < end {
+			n := min(maxLiteral, end-lit)
+			out = append(out, byte(0x80+n))
+			out = append(out, raw[lit:lit+n]...)
+			lit += n
+		}
+	}
+	for i := 0; i < len(raw); {
+		j := i
+		for j < len(raw) && raw[j] == raw[i] {
+			j++
+		}
+		if n := j - i; n >= minRun {
+			literals(i)
+			out = append(out, 0xFE, byte(n), byte(n>>8), raw[i])
+			lit = j
+		}
+		i = j
+	}
+	literals(len(raw))
+	return append(out, 0x80), nil
+}
