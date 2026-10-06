@@ -16,8 +16,11 @@ const usage = `usage: wotes-tiled COMMAND [ARGS]
       write every outdoor tile set and map of the ROM, and every dungeon level, into DIR/rom
   new NAME --base REGION [--dir DIR] [--layout FILE]
       start a land map with its object layers, and its metatile definitions, in DIR (default maps)
+  new NAME --dungeon --size WxH --look LOOK [--dir DIR]
+      start a dungeon map in DIR/dungeons: every side a wall, no objects
   convert MAP --rom PATH --out FILE [--depfile FILE] [--tilesets-only] [--tile-budget N] [--layout FILE]
-      turn a land map into assembler tables, its objects included, regenerating its project tileset first
+      turn a land map into assembler tables, its objects and the dungeon maps its entrances name included,
+      regenerating its project tileset first
   render (MAP | --region REGION) --rom PATH --out FILE.png [--plane ground|front|both] [--scale 1|2|4] [--solid] [--layout FILE]
       draw a land map or a ROM region
   layout

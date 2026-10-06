@@ -89,3 +89,35 @@ func TestExtractWithLayout(t *testing.T) {
 		t.Fatalf("a broken layout: %v", err)
 	}
 }
+
+func TestNewDungeonCommand(t *testing.T) {
+	dir := t.TempDir()
+	out, err := stdout(t, func() error {
+		return runNew([]string{"caves", "--dungeon", "--size", "4x3", "--look", "cave-06", "--dir", dir})
+	})
+	if err != nil || !strings.Contains(string(out), filepath.Join(dir, "dungeons", "caves.tmj")+" written") {
+		t.Fatalf("new --dungeon: %q, %v", out, err)
+	}
+	b, err := os.ReadFile(filepath.Join(dir, "dungeons", "caves.tmj"))
+	if err != nil || !bytes.Contains(b, []byte(`"value": "cave-06"`)) || !bytes.Contains(b, []byte(`"width": 4,`)) {
+		t.Fatalf("the map lacks its look or its width: %v", err)
+	}
+	for _, size := range []string{"", "4", "4x", "4x3x2", "4 x 3", "0x4x3"} {
+		err := runNew([]string{"other", "--dungeon", "--size", size, "--look", "cave", "--dir", dir})
+		if err == nil || !strings.Contains(err.Error(), "is not WIDTHxHEIGHT, such as 40x34") {
+			t.Errorf("size %q: %v", size, err)
+		}
+	}
+	if err := runNew([]string{"other"}); err == nil || !strings.Contains(err.Error(), "new NAME --dungeon --size WxH --look LOOK") {
+		t.Errorf("no flags: %v", err)
+	}
+	// A flag of the other form is refused, not passed over.
+	err = runNew([]string{"other", "--dungeon", "--size", "4x3", "--look", "cave", "--base", "valley", "--dir", dir})
+	if err == nil || !strings.Contains(err.Error(), "--base and --layout are for a land map") {
+		t.Errorf("--base on a dungeon map: %v", err)
+	}
+	err = runNew([]string{"other", "--base", "valley", "--size", "4x3", "--dir", dir})
+	if err == nil || !strings.Contains(err.Error(), "--size and --look are for a dungeon map") {
+		t.Errorf("--size on a land map: %v", err)
+	}
+}
