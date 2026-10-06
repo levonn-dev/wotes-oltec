@@ -19,6 +19,8 @@ New code lives in the 2 MB expansion as 68000 assembly and C, reached through si
 - [x] Objects on a Tiled land map: entrances, shops, speeches, a restore and figures, converted into tables a region reads.
 - [x] The dungeon levels in Tiled: all 38 extracted top-down with their walls, entry points, items, monsters, events and stairs, and the tool's knowledge of the ROM in a layout file another project can replace.
 - [x] The Oltec land itself: its map, terrain, landmarks and places from the Hollow World book, with its three shops, its shrine, its villagers who speak and pace, and its own colours.
+- [x] The caves of the land and the Oltec dungeon behind them, drawn in Tiled: four tunnel caves that join the land's cut-off parts, two rooms, and the dungeon with its great cave, every mouth and the door opening into one map that the build turns into the game's own levels.
+- [ ] The dungeon's second pass: its monsters, treasure and texts.
 - [ ] The region's own map screen, drawn from the finished land.
 - [ ] The merchant meeting moved into the land, with the medallion and the quest picture it grants restored.
 
