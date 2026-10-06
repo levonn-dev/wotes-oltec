@@ -36,6 +36,12 @@ func Assembler(res *convert.Result, source string) string {
 	if len(res.Spawns) > 0 {
 		globals = append(globals, n+"_spawns", n+"_spawn_grid")
 	}
+	if len(res.Entrances) > 0 {
+		globals = append(globals, n+"_entrance_regions", n+"_entrance_points")
+	}
+	if res.Levels != nil {
+		globals = append(globals, n+"_levels", n+"_level_directory", n+"_stairs")
+	}
 	fmt.Fprintf(&sb, "    .globl  %s\n", strings.Join(globals, ", "))
 	fmt.Fprintf(&sb, "\n%s_front:\n", n)
 	words(&sb, res.Front[:])
@@ -107,7 +113,7 @@ func tileBytes(sb *strings.Builder, t rom.Tile) {
 }
 
 // objects writes the tables of the map's object layers: the trigger records, the texts they show, the
-// figure records, the figures' palette line, the spawn areas and the entrance symbols.
+// figure records, the figures' palette line, the spawn areas, the entrance tables and the dungeon tables.
 func objects(sb *strings.Builder, res *convert.Result) {
 	n := res.Name
 	if len(res.Triggers) > 0 {
@@ -152,12 +158,8 @@ func objects(sb *strings.Builder, res *convert.Result) {
 		words(sb, res.FigureColours)
 	}
 	spawns(sb, res)
-	if len(res.Entrances) > 0 {
-		sb.WriteString("\n")
-		for _, e := range res.Entrances {
-			fmt.Fprintf(sb, "    .globl  %s_entrance_%d_x, %s_entrance_%d_y\n    .set    %s_entrance_%d_x, 0x%04X\n    .set    %s_entrance_%d_y, 0x%04X\n", n, e.Index, n, e.Index, n, e.Index, e.X, n, e.Index, e.Y)
-		}
-	}
+	entrances(sb, res)
+	levels(sb, res)
 }
 
 // asciz writes one NUL-terminated string, escaping what the assembler would misread.

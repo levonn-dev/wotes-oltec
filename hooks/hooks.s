@@ -304,19 +304,71 @@ encounter_place_hook:
     .section .orig_012CC5,""
     .byte   0
 
-| Entrance 14 of rom_region_exits and rom_region_exit_points, filler in the clean ROM, is
-| the two-way door between the Tradeway bottom and region 4: leaving map 0x0C lands on the
-| position the land's map gives its entrance object.
-    .section .hook_010424,"a"
-    .byte   4
-    .section .orig_010424,""
-    .byte   0x3f
+| The entrance tables. rom_region_exits and rom_region_exit_points hold forty records; the land's
+| map emits copies with its own entrances written in and added, the Tradeway's two-way door at
+| record 14 among them, and game_enter_dungeon reads the copies. On the way in its walk takes
+| their addresses in a2 and a1; eight bytes because six would split the second lea.
+    .section .hook_0103F0,"ax"
+    jsr     entrance_tables_hook
+    nop
+    .section .orig_0103F0,""
+    .byte   0x45,0xfa,0x00,0xfa,0x43,0xfa,0x00,0x20
 
-    .section .hook_01055C,"a"
-    .short  oltec_entrance_14_x, oltec_entrance_14_y
-    .byte   0, 0x0c, 0, 1               | any game level, map 0x0C, no flag set, entry point 1
-    .section .orig_01055C,""
-    .byte   0x00,0x00,0x00,0x00,0x3f,0x3f,0x3f,0x3f
+    .text
+entrance_tables_hook:
+    lea     oltec_entrance_points,%a2
+    lea     oltec_entrance_regions,%a1
+    rts
+
+| On the way out d0.w is the entrance: its region byte goes to ram_region and the first long of
+| its record, the position, comes back in d0. The twelve bytes are the two table reads and the
+| shift between them.
+    .section .hook_010482,"ax"
+    jsr     entrance_leave_hook
+    nop
+    nop
+    nop
+    .section .orig_010482,""
+    .byte   0x11,0xfb,0x00,0x92,0x8f,0x3d,0xe7,0x40,0x20,0x3b,0x00,0x60
+
+    .text
+entrance_leave_hook:
+    move.l  %a0,-(%sp)
+    lea     oltec_entrance_regions,%a0
+    move.b  (%a0,%d0.w),ram_region
+    asl.w   #3,%d0
+    lea     oltec_entrance_points,%a0
+    move.l  (%a0,%d0.w),%d0
+    movea.l (%sp)+,%a0
+    rts
+
+| The stairs table. A staircase's value picks a record of rom_dungeon_stairs, thirteen in the
+| game; the land's map emits a copy with its own after them. d0.w is the record's offset; the
+| game goes on with a0 on the record's third byte and the destination map in d0.w.
+    .section .hook_010CEE,"ax"
+    jsr     stairs_hook
+    .section .orig_010CEE,""
+    .byte   0x41,0xfb,0x00,0x1a,0x30,0x18
+
+    .text
+stairs_hook:
+    lea     oltec_stairs,%a0
+    adda.w  %d0,%a0
+    move.w  (%a0)+,%d0
+    rts
+
+| The level tables. game_change_map holds rom_map_table's address and the object loader
+| rom_map_directory's; the land's map emits copies with a level for each of its caves after the
+| game's 38. A text table's entries stay counted from rom_map_directory, which 0x21814 keeps.
+    .section .hook_0113AC,"a"
+    .long   oltec_levels
+    .section .orig_0113AC,""
+    .long   0x0001145c
+
+    .section .hook_010EEE,"a"
+    .long   oltec_level_directory
+    .section .orig_010EEE,""
+    .long   0x000d5e36
 
 | Map 0x0C's object list: the merchant event and the medallion give way to a kind-6
 | transition on tile 8,0 with exit code -15, entrance 14; the records behind them move up.

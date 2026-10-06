@@ -27,7 +27,7 @@ func TestConvertObjects(t *testing.T) {
 	if !res.HasRegion || res.Region != 3 {
 		t.Fatalf("region %d, %v", res.Region, res.HasRegion)
 	}
-	if want := []convert.Entrance{{Index: 3, X: 0x308, Y: 0x408}}; !reflect.DeepEqual(res.Entrances, want) {
+	if want := []convert.Entrance{{Name: "cave", ID: 3, Index: 3, X: 0x308, Y: 0x408, Map: 2, Entry: 1}}; !reflect.DeepEqual(res.Entrances, want) {
 		t.Fatalf("entrances %+v, want %+v", res.Entrances, want)
 	}
 	wantTriggers := []convert.Trigger{
@@ -65,7 +65,7 @@ func TestConvertObjects(t *testing.T) {
 // A filler record belongs to no region, so any map may place it.
 func TestEntranceFiller(t *testing.T) {
 	res, err := convertFixture(t, func(_ string, m *tiled.Map) {
-		m.Layers[4].Objects[0].Properties = []tiled.Property{tiled.Str(extract.PropKind, extract.KindEntrance), tiled.Int(extract.PropIndex, 2)}
+		m.Layers[4].Objects[0].Properties = []tiled.Property{tiled.Str(extract.PropKind, extract.KindEntrance), tiled.Int(extract.PropIndex, 2), tiled.Int(extract.PropMap, 2), tiled.Int(extract.PropEntry, 1)}
 	})
 	must(t, err)
 	if len(res.Entrances) != 1 || res.Entrances[0].Index != 2 {
@@ -146,11 +146,11 @@ func TestObjectErrors(t *testing.T) {
 		{"entrance without region", "layer transitions: object 3 \"cave\": an entrance needs the map property wotes.region", func(m *tiled.Map) {
 			m.Properties = []tiled.Property{m.Properties[0], m.Properties[2]}
 		}},
-		{"entrance without index", "an entrance needs wotes.index", func(m *tiled.Map) {
+		{"entrance that leads nowhere", "an entrance names where it leads: a dungeon map and its entry point in wotes.dungeon and wotes.to, or one of the game's levels and its entry point in wotes.map and wotes.entry", func(m *tiled.Map) {
 			set(&m.Layers[transitions].Objects[0], tiled.Str(extract.PropKind, extract.KindEntrance))
 		}},
 		{"entrance of another region", "entrance 0 belongs to region 1, not the map's region 3", func(m *tiled.Map) {
-			set(&m.Layers[transitions].Objects[0], tiled.Str(extract.PropKind, extract.KindEntrance), tiled.Int(extract.PropIndex, 0))
+			set(&m.Layers[transitions].Objects[0], tiled.Str(extract.PropKind, extract.KindEntrance), tiled.Int(extract.PropIndex, 0), tiled.Int(extract.PropMap, 2), tiled.Int(extract.PropEntry, 1))
 		}},
 		{"entrance outside the table", "entrance 40 is outside the 40 records", func(m *tiled.Map) {
 			set(&m.Layers[transitions].Objects[0], tiled.Str(extract.PropKind, extract.KindEntrance), tiled.Int(extract.PropIndex, 40))
@@ -338,7 +338,7 @@ func TestEntranceRoundsDown(t *testing.T) {
 }
 
 // The fixture converted as another map of another region, with that region's entrance index, emits the
-// same tables; only the map's name and the entrance's index differ.
+// same tables; only the map's name and the record its entrance takes in the entrance tables differ.
 func TestConvertUnderAnotherName(t *testing.T) {
 	dir, g := fixture(t)
 	first, err := convert.Convert(convert.Options{Game: g, MapPath: filepath.Join(dir, "test.tmj")})
@@ -357,7 +357,7 @@ func TestConvertUnderAnotherName(t *testing.T) {
 	}
 	for _, l := range m.Layers {
 		if l.Name == extract.LayerTransitions {
-			l.Objects[0].Properties = []tiled.Property{tiled.Str(extract.PropKind, extract.KindEntrance), tiled.Int(extract.PropIndex, 0)}
+			l.Objects[0].Properties = []tiled.Property{tiled.Str(extract.PropKind, extract.KindEntrance), tiled.Int(extract.PropIndex, 0), tiled.Int(extract.PropMap, 2), tiled.Int(extract.PropEntry, 1)}
 		}
 	}
 	must(t, tiled.WriteMap(filepath.Join(dir, "hills.tmj"), m))
@@ -366,10 +366,19 @@ func TestConvertUnderAnotherName(t *testing.T) {
 	must(t, os.WriteFile(filepath.Join(dir, "hills-metatiles.tmj"), defs, 0o644))
 	second, err := convert.Convert(convert.Options{Game: g, MapPath: filepath.Join(dir, "hills.tmj")})
 	must(t, err)
-	a := emit.Assembler(first, "maps/land.tmj")
-	b := strings.NewReplacer("hills_", "test_", "entrance_0_", "entrance_3_").Replace(emit.Assembler(second, "maps/land.tmj"))
-	if a != b {
-		t.Fatalf("the two maps differ beyond their names:\n%s\n----\n%s", a, b)
+	// cut splits the assembler round the two entrance tables.
+	cut := func(s string) (before, tables, after string) {
+		before, rest, _ := strings.Cut(s, "test_entrance_regions:")
+		tables, after, _ = strings.Cut(rest, "test_levels:")
+		return before, tables, after
+	}
+	a0, at, a1 := cut(emit.Assembler(first, "maps/land.tmj"))
+	b0, bt, b1 := cut(strings.ReplaceAll(emit.Assembler(second, "maps/land.tmj"), "hills_", "test_"))
+	if a0 != b0 || a1 != b1 || a1 == "" {
+		t.Fatalf("the two maps differ beyond their names and their entrance tables:\n%s\n----\n%s", a0+a1, b0+b1)
+	}
+	if !strings.Contains(at, "    .byte   3 | entrance 3, cave\n") || !strings.Contains(bt, "    .byte   1 | entrance 0, cave\n    .incbin \"clean.md\", 0x10417, 3\n") {
+		t.Fatalf("the entrance tables:\n%s\n----\n%s", at, bt)
 	}
 }
 

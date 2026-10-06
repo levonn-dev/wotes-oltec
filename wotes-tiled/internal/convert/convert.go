@@ -84,6 +84,9 @@ type Result struct {
 	Region        int // the map's wotes.region, the ram_region whose entrances it places
 	HasRegion     bool
 	Entrances     []Entrance
+	GameEntrances int     // the records the game's entrance tables hold, before the map's new ones
+	EntranceAt    [2]int  // where the game keeps its region bytes and its records
+	Levels        *Levels // nil for a map without an entrance
 	Triggers      []Trigger
 	Texts         [][]string // the message texts the triggers show, by Trigger.Text
 	Figures       []Figure
@@ -183,6 +186,9 @@ func Convert(opt Options) (*Result, error) {
 		return nil, err
 	}
 	if err := c.objects(m, infos, layers, res); err != nil {
+		return nil, err
+	}
+	if err := c.levels(res); err != nil {
 		return nil, err
 	}
 	sort.Strings(c.deps)

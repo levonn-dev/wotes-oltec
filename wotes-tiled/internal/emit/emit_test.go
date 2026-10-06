@@ -21,14 +21,12 @@ func TestTriggerBytes(t *testing.T) {
 		Triggers: []convert.Trigger{
 			{Name: "elder", X0: 0x300, Y0: 0x310, X1: 0x317, Y1: 0x310, Level: 4, Kind: convert.TriggerSpeech, Shop: -1, Text: 0},
 			{Name: "armour", X0: 0x100, Y0: 0x110, X1: 0x12F, Y1: 0x12F, Level: 3, Kind: convert.TriggerShop, Shop: 1, Text: -1}},
-		Texts:     [][]string{{"HELLO", "THERE"}},
-		Entrances: []convert.Entrance{{Index: 14, X: 0xA08, Y: 0x918}}}
+		Texts: [][]string{{"HELLO", "THERE"}}}
 	got := Assembler(res, "maps/land.tmj")
 	for _, want := range []string{
 		".globl  land_front, land_ground, land_blocks, land_metatiles, land_tiles, land_triggers, land_texts\n",
 		"land_triggers:\n    .short  0x0310, 0x0310, 0x0300, 0x0317 | elder\n    .byte   4, 3\n    .long   land_text_0\n    .short  0x0110, 0x012F, 0x0100, 0x012F | armour\n    .byte   3, 1\n    .long   1\n    .short  0xFFFF\n",
 		"land_texts:\nland_text_0:\n    .byte   4, 0\n    .asciz  \"HELLO\"\n    .asciz  \"THERE\"\n    .byte   0\n    .balign 2\n",
-		"    .globl  land_entrance_14_x, land_entrance_14_y\n    .set    land_entrance_14_x, 0x0A08\n    .set    land_entrance_14_y, 0x0918\n",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("assembler lacks %q:\n%s", want, got)

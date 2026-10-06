@@ -96,7 +96,7 @@ func fixture(t *testing.T) (string, *rom.Game) {
 	props := func(ps ...tiled.Property) []tiled.Property { return ps }
 	m.Layers = append(m.Layers,
 		group(5, extract.LayerTransitions,
-			tiled.Object{ID: 3, Name: "cave", X: 0x30C, Y: 0x40A, Point: true, Visible: true, Properties: props(tiled.Str(extract.PropKind, extract.KindEntrance), tiled.Int(extract.PropIndex, 3))}),
+			tiled.Object{ID: 3, Name: "cave", X: 0x30C, Y: 0x40A, Point: true, Visible: true, Properties: props(tiled.Str(extract.PropKind, extract.KindEntrance), tiled.Int(extract.PropIndex, 3), tiled.Int(extract.PropMap, 2), tiled.Int(extract.PropEntry, 1))}),
 		group(6, extract.LayerTriggers,
 			tiled.Object{ID: 4, Name: "armour", X: 0x100, Y: 0x110, Width: 0x30, Height: 0x20, Visible: true, Properties: props(tiled.Str(extract.PropKind, extract.KindShop), tiled.Int(extract.PropShop, 1), tiled.Int(extract.PropLevel, 3))},
 			tiled.Object{ID: 5, Name: "pool", X: 0x200, Y: 0x210, Width: 24, Height: 24, Visible: true, Properties: props(tiled.Str(extract.PropKind, extract.KindRestore), tiled.Str(extract.PropText, "THE POOL RESTORES YOU."))},

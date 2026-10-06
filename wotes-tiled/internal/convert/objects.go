@@ -28,12 +28,6 @@ const FigureLine = 3
 // MaxSlot is the highest slot word a figure may hold: the pacer bytes from 0xFF8EE8 that the figure tile loader clears end at 0xFF8EFB, and 0x14 on is the townsfolk's.
 const MaxSlot = 0x13
 
-// Entrance is an entrance object: the index of the record it takes in the entrance tables and its
-// position, multiples of 8.
-type Entrance struct {
-	Index, X, Y int
-}
-
 // Trigger is an inclusive party-pixel rectangle; Shop and Text (an index into Result.Texts) are -1 when unused.
 type Trigger struct {
 	Name           string
@@ -88,12 +82,8 @@ func (c *converter) objects(m *tiled.Map, infos []*tilesetInfo, ll *landLayers, 
 		return fmt.Errorf("%s: %s %d must fit a byte, 0 to 255", path, extract.PropRegion, res.Region)
 	}
 	if ll.transitions != nil {
-		for _, o := range ll.transitions.Objects {
-			e, err := c.entrance(o, res)
-			if err != nil {
-				return objectErr(path, extract.LayerTransitions, o, err)
-			}
-			res.Entrances = append(res.Entrances, e)
+		if err := c.entrances(ll.transitions, res); err != nil {
+			return err
 		}
 	}
 	if ll.triggers != nil {
@@ -143,41 +133,6 @@ func round(v float64) int { return int(math.Round(v)) }
 // inMap reports a rectangle inside the map.
 func inMap(x0, y0, x1, y1 int) bool {
 	return x0 >= 0 && y0 >= 0 && x1 < rom.MapPixels && y1 < rom.MapPixels && x1 >= x0 && y1 >= y0
-}
-
-// entrance reads an entrance point: a record of the map's region, or a filler any patch may take over.
-func (c *converter) entrance(o tiled.Object, res *Result) (Entrance, error) {
-	if k := tiled.StringProp(o.Properties, extract.PropKind); k != extract.KindEntrance {
-		return Entrance{}, fmt.Errorf("%s %q is not %s; a land map's transitions are entrance points", extract.PropKind, k, extract.KindEntrance)
-	}
-	if !o.Point {
-		return Entrance{}, fmt.Errorf("an entrance is a point object")
-	}
-	if !res.HasRegion {
-		return Entrance{}, fmt.Errorf("an entrance needs the map property %s, the region whose entrance records the map places", extract.PropRegion)
-	}
-	index, ok := tiled.IntProp(o.Properties, extract.PropIndex)
-	if !ok {
-		return Entrance{}, fmt.Errorf("an entrance needs %s, its record in rom_region_exit_points", extract.PropIndex)
-	}
-	rec, err := c.opt.Game.EntranceAt(index)
-	if err != nil {
-		return Entrance{}, err
-	}
-	if rec.Map != rom.FillerMap && rec.Region != res.Region {
-		return Entrance{}, fmt.Errorf("entrance %d belongs to region %d, not the map's region %d", index, rec.Region, res.Region)
-	}
-	for _, p := range res.Entrances {
-		if p.Index == index {
-			return Entrance{}, fmt.Errorf("entrance %d is placed twice", index)
-		}
-	}
-	// The game compares entrances at 8-pixel granularity, so the position rounds down.
-	x, y := int(math.Floor(o.X)), int(math.Floor(o.Y))
-	if !inMap(x, y, x, y) {
-		return Entrance{}, fmt.Errorf("(%d, %d) is outside the %d-pixel map", x, y, rom.MapPixels)
-	}
-	return Entrance{Index: index, X: x &^ 7, Y: y &^ 7}, nil
 }
 
 // trigger reads a special-place rectangle and, for a restore or a speech, its text.
