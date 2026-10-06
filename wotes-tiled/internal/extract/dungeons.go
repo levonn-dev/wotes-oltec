@@ -202,7 +202,7 @@ func DungeonMap(g *rom.Game, d *rom.Dungeon, sheet string) (*tiled.Map, error) {
 	}
 	m := &tiled.Map{Type: "map", Version: tiled.FormatVersion, TiledVersion: tiled.TiledVersion, Orientation: "orthogonal", RenderOrder: "right-down",
 		Width: w, Height: h, TileWidth: DungeonTile, TileHeight: DungeonTile,
-		Properties: []tiled.Property{tiled.Int(PropMap, d.Index), tiled.Str(PropName, d.Name), tiled.Str(PropStyle, style.Name), tiled.Str(PropGraphics, hex(d.Graphics)), tiled.Str(PropGrid, hex(d.Packed))},
+		Properties: []tiled.Property{tiled.Int(PropMap, d.Index), tiled.Str(PropName, d.Name), tiled.Str(PropStyle, style.Name), tiled.Str(PropLook, lookOf(sheet)), tiled.Str(PropGraphics, hex(d.Graphics)), tiled.Str(PropGrid, hex(d.Packed))},
 		Tilesets:   []tiled.TilesetRef{{FirstGID: 1, Source: SidesName + ".tsj"}}}
 	for s, name := range sideLayers {
 		gids := make([]uint32, w*h)
@@ -263,6 +263,10 @@ func (b *builder) dungeonObjects(d *rom.Dungeon) ([]objectLayer, error) {
 			return append([]tiled.Property{tiled.Int(PropKindByte, o.Kind), tiled.Int(PropX, o.X), tiled.Int(PropY, o.Y), tiled.Str(PropRecord, record(o.Record))}, more...)
 		}
 		fields := []tiled.Property{tiled.Int(PropAmount, o.Amount), tiled.Int(PropUses, o.Uses), tiled.Int(PropExtra, o.Extra), tiled.Int(PropGate, o.Gate), tiled.Int(PropFlag, o.Flag)}
+		// A record of any kind may name a text; the game's one actor does.
+		if o.Text > 0 {
+			fields = append(fields, tiled.Str(PropText, d.Texts[o.Text-1]))
+		}
 		switch o.Type() {
 		case rom.ObjectTransition:
 			obj, err := b.transition(d, o, common())
@@ -274,9 +278,7 @@ func (b *builder) dungeonObjects(d *rom.Dungeon) ([]objectLayer, error) {
 			name := fmt.Sprintf("action %d", o.Value)
 			props := common(append([]tiled.Property{tiled.Int(PropAction, o.Value)}, fields...)...)
 			if o.Text > 0 {
-				text := d.Texts[o.Text-1]
-				name = firstSentence(strings.Split(text, "\n"))
-				props = append(props, tiled.Str(PropText, text))
+				name = firstSentence(strings.Split(d.Texts[o.Text-1], "\n"))
 			}
 			events = append(events, b.tile(o.X, o.Y, name, ClassEvent, KindEvent, props...))
 		case rom.ObjectItem:
@@ -293,7 +295,8 @@ func (b *builder) dungeonObjects(d *rom.Dungeon) ([]objectLayer, error) {
 			if o.Type() == rom.ObjectActor {
 				kind, name = KindActor, fmt.Sprintf("actor %d", o.Value)
 			}
-			monsters = append(monsters, b.tile(o.X, o.Y, name, ClassMonster, kind, common(append([]tiled.Property{tiled.Int(PropMonster, o.MonsterType())}, fields...)...)...))
+			// Bits 4 and 5 of a monster's kind byte are its facing.
+			monsters = append(monsters, b.tile(o.X, o.Y, name, ClassMonster, kind, common(append([]tiled.Property{tiled.Int(PropMonster, o.MonsterType()), tiled.Int(PropFacing, o.Kind>>4&3)}, fields...)...)...))
 		}
 	}
 	return []objectLayer{{LayerEntries, entries}, {LayerTransitions, transitions}, {LayerEvents, events}, {LayerItems, items}, {LayerMonsters, monsters}}, nil

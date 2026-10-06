@@ -73,44 +73,26 @@ type wallSheet struct {
 	file           string
 }
 
-// wallSheets lists the sheets the maps need, in map order, and names each map's sheet. A style's first
-// graphics block keeps the style's name; each further block is named after the first map that uses it,
-// because the blocks differ in the walls' colours. A style no map uses gets one sheet in map 0's colours.
+// wallSheets lists the sheets the maps need, one a look in map order, and names each map's sheet. The
+// looks of one style differ in the walls' colours. A style no map uses gets one sheet in map 0's colours.
 func wallSheets(g *rom.Game) ([]wallSheet, map[int]string, error) {
-	count, err := g.DungeonCount()
+	looks, of, err := Looks(g)
 	if err != nil {
 		return nil, nil, err
 	}
 	styles := g.Layout.Dungeons.Styles
 	var sheets []wallSheet
+	used := make([]bool, len(styles))
+	for _, l := range looks {
+		sheets = append(sheets, wallSheet{style: l.Style, palette: l.Map, file: WallsFile(l.Name)})
+		used[l.Style] = true
+	}
 	files := map[int]string{}
-	seen := map[[2]int]string{}
-	blocks := make([]int, len(styles))
-	for m := 0; m < count; m++ {
-		d, err := g.Dungeon(m)
-		if err != nil {
-			return nil, nil, err
-		}
-		i, err := g.Layout.StyleOf(d.Style)
-		if err != nil {
-			return nil, nil, fmt.Errorf("map %#x (%s): %v", d.Index, d.Name, err)
-		}
-		key := [2]int{i, d.Graphics}
-		file, ok := seen[key]
-		if !ok {
-			name := styles[i].Name
-			if blocks[i] > 0 {
-				name = fmt.Sprintf("%s-%02x", name, m)
-			}
-			file = WallsFile(name)
-			blocks[i]++
-			seen[key] = file
-			sheets = append(sheets, wallSheet{style: i, palette: m, file: file})
-		}
-		files[m] = file
+	for m, k := range of {
+		files[m] = WallsFile(looks[k].Name)
 	}
 	for i := range styles {
-		if blocks[i] == 0 {
+		if !used[i] {
 			sheets = append(sheets, wallSheet{style: i, palette: 0, file: WallsFile(styles[i].Name)})
 		}
 	}
