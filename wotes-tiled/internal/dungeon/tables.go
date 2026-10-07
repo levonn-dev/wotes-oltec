@@ -4,22 +4,18 @@ package dungeon
 
 import (
 	"fmt"
-	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/levonn-dev/wotes-oltec/wotes-tiled/internal/extract"
 	"github.com/levonn-dev/wotes-oltec/wotes-tiled/internal/rom"
 )
 
-// Tables is what reading a map needs from the game: its looks, its dungeon monsters and its items by
-// name, and the amount and uses bytes its own levels give each monster.
+// Tables is what reading a map needs from the game: its looks, and the amount and uses bytes its own
+// levels give each monster.
 type Tables struct {
-	game     *rom.Game
-	looks    []extract.Look
-	monsters map[string][]int
-	items    map[string][]int
-	shape    map[int][2]int // by battle type
+	game  *rom.Game
+	looks []extract.Look
+	shape map[int][2]int // by battle type
 }
 
 // NewTables reads them from the game.
@@ -28,18 +24,7 @@ func NewTables(g *rom.Game) (*Tables, error) {
 	if err != nil {
 		return nil, err
 	}
-	t := &Tables{game: g, looks: looks, monsters: map[string][]int{}, items: map[string][]int{}, shape: map[int][2]int{}}
-	for v := 1; v <= rom.MaxMonsterValue; v++ {
-		typ := v - 1 + rom.FirstNamedMonster
-		if name := g.MonsterName(typ); name != "" {
-			t.monsters[name] = append(t.monsters[name], typ)
-		}
-	}
-	for id := 1; id <= g.Layout.Items.Count; id++ {
-		if name, err := g.ItemName(id); err == nil {
-			t.items[name] = append(t.items[name], id)
-		}
-	}
+	t := &Tables{game: g, looks: looks, shape: map[int][2]int{}}
 	count, err := g.DungeonCount()
 	if err != nil {
 		return nil, err
@@ -85,30 +70,4 @@ func (t *Tables) look(name string) (extract.Look, error) {
 		names[i] = l.Name
 	}
 	return extract.Look{}, fmt.Errorf("no look called %q: use one of %s", name, strings.Join(names, ", "))
-}
-
-// number reads a decimal or 0x hex number, as a name may be given.
-func number(s string) (int, bool) {
-	v, err := strconv.ParseInt(s, 0, 32)
-	return int(v), err == nil
-}
-
-// named finds what a name or a number written as text stands for among ids by name.
-func named(what, s string, byName map[string][]int) (int, error) {
-	if v, ok := number(s); ok {
-		return v, nil
-	}
-	ids := byName[s]
-	switch len(ids) {
-	case 1:
-		return ids[0], nil
-	case 0:
-		return 0, fmt.Errorf("the game has no %s called %q", what, s)
-	}
-	parts := make([]string, len(ids))
-	sort.Ints(ids)
-	for i, id := range ids {
-		parts[i] = fmt.Sprintf("%#x", id)
-	}
-	return 0, fmt.Errorf("the game has %d %ss called %q: give the number, %s", len(ids), what, s, strings.Join(parts, " or "))
 }

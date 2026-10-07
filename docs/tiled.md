@@ -126,7 +126,7 @@ A step and the view use one side, the face of the tile ahead that is turned towa
 
 The game's own levels hold 149 two-way secret doors and 13 one-way ones. No moving monster passes a face above 0, so a secret door also keeps a room's monsters inside it. The cave walk follows the same rule: a secret door joins the caves on its two sides into one level, a one-way face joins them from the side that can enter.
 
-The objects are points on the tile they stand in, each with a `wotes.kind`; the properties the extractor writes only for reference (`wotes.x`, `wotes.y`, `wotes.record`, `wotes.kind_byte`, `wotes.map`, `wotes.entry`, `wotes.region`, `wotes.landing`) are ignored, so a level copied from `maps/rom/dungeons/` converts as it stands.
+The objects take the form the extracted levels have, one object a record, so a level copied from `maps/rom/dungeons/` converts as it stands and a map of your own reads like one: a monster is a point named after the monster with its battle type in `wotes.monster`, three cave bears on a tile are three such points, an item is named after the item with its number in `wotes.item`, and an event takes the first sentence of its text as its name. Each object carries a `wotes.kind`; the properties the extractor writes only for reference (`wotes.x`, `wotes.y`, `wotes.record`, `wotes.kind_byte`, `wotes.map`, `wotes.entry`, `wotes.region`, `wotes.landing`) are ignored.
 
 | Layer | `wotes.kind` | Properties |
 |---|---|---|
@@ -134,17 +134,17 @@ The objects are points on the tile they stand in, each with a `wotes.kind`; the 
 | `transitions` | `exit` | `wotes.to`, the name of an entrance on the land map being converted, or `wotes.entrance`, the number of one of the game's own entrance records |
 | `transitions` | `stairs` | `wotes.to`, the name of an entry point, and `wotes.dungeon` when that entry point is in another dungeon map; or `wotes.value`, one of the game's own stairs records by number |
 | `events` | `event` | `wotes.action` 0 (a trap), 1 (a reward or a message), 2 (a quest picture) or 3 (an item gate); `wotes.amount`, `wotes.uses`, `wotes.extra`; `wotes.text`, the lines separated by newlines |
-| `items` | `item` | `wotes.item`, a name from the game's item table or a number |
-| `monsters` | `monster` | `wotes.monster`, a name from the game's monster table or a battle type number up to `0x61`; `wotes.count`, that many on the tile (1 when absent); `wotes.facing`; `wotes.amount` and `wotes.uses`, which the game's most frequent record of that type supplies when absent |
+| `items` | `item` | `wotes.item`, the item's number in the game's table, as the extracted levels carry it |
+| `monsters` | `monster` | `wotes.monster`, the battle type number, `0x13` to `0x61`; `wotes.facing`; `wotes.amount` and `wotes.uses`, which the game's most frequent record of that type supplies when absent |
 | `monsters` | `actor` | the fields the extractor wrote, passed through |
 
-Every event, item, monster and transition may carry `wotes.gate` and `wotes.flag`, event flags from the free range `0x44` to `0xF6` (0 for none; an item gate's flag may be `0xFF`). A name two monster types or two items share is given as its number, as in a spawn list. A text is upper-case, at most 9 lines of 26 characters from the dungeon font (bytes `0x20` to `0x61`: the space, punctuation, digits and A to Z; the last seven bytes, `[`, `\`, `]`, `^`, `_`, the backquote and a lower-case `a`, draw the font's icons, so an `a` is accepted and shows an icon, not a letter); equal texts on one level share one entry.
+Every event, item, monster and transition may carry `wotes.gate` and `wotes.flag`, event flags from the free range `0x44` to `0xF6` (0 for none; an item gate's flag may be `0xFF`). A text is upper-case, at most 9 lines of 26 characters from the dungeon font (bytes `0x20` to `0x61`: the space, punctuation, digits and A to Z; the last seven bytes, `[`, `\`, `]`, `^`, `_`, the backquote and a lower-case `a`, draw the font's icons, so an `a` is accepted and shows an icon, not a letter); equal texts on one level share one entry.
 
 A cave is the tiles a party reaches from an entry point by the step rule above, the grid's wrap included. A tile with an exit or a staircase is reached and never stepped beyond, since stepping onto it takes the party off the level, unless an entry point stands on it. Entry points whose reaches meet share a cave, and a dug passage between two caves makes them one. Each cave becomes one level of the game over the map's one grid: a record of the map table with the look's style and graphics, an object list and a text table of its own. Tiles no entry point reaches are rock, whatever their sides, and an object on one is refused. A cave's entry points are numbered in object id order; its records are written in object id order too, which is the ROM's order on an extracted level and the order of drawing on a new one. Caves are numbered by their first entry point, dungeon maps by name, and the first new level is the count of the game's own, 38.
 
 The build finds the dungeon maps through the land map: `convert` reads `dungeons/NAME.tmj` beside the land map for every map its entrances name, and every map their staircases name, and emits the levels under the land map's name: `NAME_levels` and `NAME_level_directory`, the game's 38 records followed by the new ones; `NAME_stairs`, the game's thirteen records followed by one for each entry point a staircase lands on; the entrance tables of "Objects on a map of your own"; one packed grid per dungeon map; and each cave's object list and texts. The report's block for each dungeon map gives its size in tiles, its look and the packed grid's bytes, then one line a cave: its level number, its entry points by name, its tiles, its records of the 127 a level places, its texts, how many different monster pictures it shows, and the flags it tests and sets; then how many levels, stairs records and entrances the game and the map use of their limits. A cave's tiles include the exit tiles behind its mouths, which a party steps onto to leave.
 
-`maps/dungeons/oltec_caves.tmj` is a working example: 40 by 34 tiles in the `cave-06` look, seven caves with seventeen entry points named as the land's places, each with its exit on the rock tile behind it, iron bars and a message in one room.
+`maps/dungeons/oltec_caves.tmj` is a working example: 40 by 34 tiles in the `cave-06` look, five caves with seventeen entry points named as the land's places, each with its exit on the rock tile behind it, and monsters, finds and texts on every layer the table above names.
 
 ## The layout file
 
@@ -295,7 +295,7 @@ Every error names the file, and when a cell is involved the layer and its coordi
 | `(x, y) is outside the W by H grid` | move the object onto the map |
 | `no entry point reaches tile X,Y` | dig a way to the tile from an entry point, or move the object into a cave |
 | `is KIND; this layer holds …` | put the object on its layer: entries, exits and stairs, events, items, monsters and actors |
-| `the cave of entry point NAME has N records; a level places 127` | fewer objects or a smaller `wotes.count` in that cave |
+| `the cave of entry point NAME has N records; a level places 127` | fewer objects in that cave |
 | `the cave of entry point NAME has N entry points; 86 work` | fewer entry points in that cave |
 | `the cave of entry point NAME has N texts; a record names one in a byte` | fewer different texts in that cave |
 | `another entry point has this name` | rename one of the two entry points |
@@ -305,8 +305,8 @@ Every error names the file, and when a cell is involved the layer and its coordi
 | `line N of the text has M characters, the box shows 26` | shorten the line |
 | `the text has N lines, a dungeon text may have 9` | cut the text |
 | `line N of the text has 'c', which the dungeon font cannot draw` | use the space, punctuation, digits and A to Z |
-| `the game has no monster called "…"` / `no item called "…"` | use a name from the game's tables, or the number |
-| `the game has N monsters called "…": give the number` | write the one you mean as its number |
+| `wotes.monster must be the battle type's number, as the extracted levels carry it` / `wotes.item must be the item's number` | write the number; the extracted levels under `maps/rom/dungeons/` show each monster's and item's beside its name |
+| `wotes.count: place one object a monster, as the extracted levels do` | one point a monster, stacked on the tile |
 | `battle type 0xNN is no dungeon monster; they run 0x13 to 0x61` | pick a monster a dungeon record can hold |
 | `wotes.amount is missing, and the game's levels hold no monster of this type to take it from` | set `wotes.amount` and `wotes.uses` on the monster |
 | `wotes.gate 0xNN is one of the game's own flags; new levels use 0x44 to 0xf6` | use a flag from the free range, 0 for none |

@@ -45,7 +45,6 @@ type thing struct {
 	layer string
 	rec   Record
 	text  string
-	count int
 }
 
 // Read reads the dungeon map at path.
@@ -190,9 +189,7 @@ func (t *Tables) Read(path string, opt Options) (*Map, error) {
 			}
 			rec.Text = texts[k][th.text]
 		}
-		for i := 0; i < th.count; i++ {
-			c.Records = append(c.Records, rec)
-		}
+		c.Records = append(c.Records, rec)
 	}
 	for _, c := range m.Caves {
 		if len(c.Records) > rom.MaxLevelObjects {
@@ -244,11 +241,11 @@ func (f *fields) num(name string, def, top int) int {
 	return v
 }
 
-// ref reads a property that names a monster or an item, or gives its number.
-func ref(props []tiled.Property, name, what string, byName map[string][]int) (int, error) {
+// ref reads the property that gives a monster's battle type or an item's number, the extracted levels' form.
+func ref(props []tiled.Property, name, what string) (int, error) {
 	v, ok := find(props, name)
 	if !ok {
-		return 0, fmt.Errorf("%s is missing: the %s's name or number", name, what)
+		return 0, fmt.Errorf("%s is missing: the %s's number", name, what)
 	}
 	switch x := v.(type) {
 	case float64:
@@ -257,10 +254,8 @@ func ref(props []tiled.Property, name, what string, byName map[string][]int) (in
 		}
 	case int:
 		return x, nil
-	case string:
-		return named(what, strings.TrimSpace(x), byName)
 	}
-	return 0, fmt.Errorf("%s must be the %s's name or number", name, what)
+	return 0, fmt.Errorf("%s must be the %s's number, as the extracted levels carry it", name, what)
 }
 
 // object reads one object of a layer.
@@ -272,11 +267,14 @@ func (t *Tables) object(layer string, o tiled.Object, w, h int, opt Options) (th
 	if !o.Point {
 		return thing{}, fmt.Errorf("a dungeon object is a point on its tile")
 	}
+	if _, ok := find(o.Properties, "wotes.count"); ok {
+		return thing{}, fmt.Errorf("wotes.count: place one object a monster, as the extracted levels do")
+	}
 	x, y := int(math.Floor(o.X/extract.DungeonTile)), int(math.Floor(o.Y/extract.DungeonTile))
 	if x < 0 || y < 0 || x >= w || y >= h {
 		return thing{}, fmt.Errorf("(%g, %g) is outside the %d by %d grid", o.X, o.Y, w, h)
 	}
-	th := thing{layer: layer, count: 1, rec: Record{Name: o.Name, ID: o.ID, X: x, Y: y}}
+	th := thing{layer: layer, rec: Record{Name: o.Name, ID: o.ID, X: x, Y: y}}
 	r, f := &th.rec, &fields{props: o.Properties}
 	switch kind {
 	case extract.KindEntry:
@@ -316,7 +314,7 @@ func (t *Tables) object(layer string, o tiled.Object, w, h int, opt Options) (th
 		r.Kind, r.Value = rom.ObjectEvent, action
 		r.Amount, r.Uses, r.Extra = f.num(extract.PropAmount, 0, 0xFF), f.num(extract.PropUses, 0, 0xFF), f.num(extract.PropExtra, 0, 0xFF)
 	case extract.KindItem:
-		id, err := ref(o.Properties, extract.PropItem, "item", t.items)
+		id, err := ref(o.Properties, extract.PropItem, "item")
 		if err != nil {
 			return thing{}, err
 		}
@@ -326,7 +324,7 @@ func (t *Tables) object(layer string, o tiled.Object, w, h int, opt Options) (th
 		r.Kind, r.Value = itemKind, id
 		r.Amount, r.Uses, r.Extra = f.num(extract.PropAmount, 0, 0xFF), f.num(extract.PropUses, 0, 0xFF), f.num(extract.PropExtra, 0, 0xFF)
 	default:
-		typ, err := ref(o.Properties, extract.PropMonster, "monster", t.monsters)
+		typ, err := ref(o.Properties, extract.PropMonster, "battle type")
 		if err != nil {
 			return thing{}, err
 		}
@@ -346,9 +344,6 @@ func (t *Tables) object(layer string, o tiled.Object, w, h int, opt Options) (th
 			shape[i] = f.num(name, shape[i], 0xFF)
 		}
 		r.Amount, r.Uses, r.Extra = shape[0], shape[1], f.num(extract.PropExtra, 0, 0xFF)
-		if th.count = f.num(PropCount, 1, rom.MaxLevelObjects); th.count < 1 {
-			return thing{}, fmt.Errorf("%s must be at least 1", PropCount)
-		}
 	}
 	r.Gate, r.Flag = f.num(extract.PropGate, 0, 0xFF), f.num(extract.PropFlag, 0, 0xFF)
 	if f.err != nil {

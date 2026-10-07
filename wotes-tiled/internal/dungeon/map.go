@@ -13,7 +13,6 @@ import (
 const (
 	PropTo      = "wotes.to"
 	PropDungeon = "wotes.dungeon"
-	PropCount   = "wotes.count"
 )
 
 // itemKind is an item record's kind byte in every level of the game.

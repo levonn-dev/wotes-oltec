@@ -112,8 +112,8 @@ func TestReadACaveForEachPartOfTheGrid(t *testing.T) {
 	s.entry("a", 0, 0, 1)
 	s.entry("b", 2, 0, 3)
 	s.entry("c", 1, 0, 0)
-	s.add(extract.LayerMonsters, "a troglodyte", extract.KindMonster, 1, 0, tiled.Str(extract.PropMonster, "TROGLODYTE"), tiled.Int(extract.PropFacing, 2))
-	s.add(extract.LayerItems, "a torch", extract.KindItem, 3, 0, tiled.Str(extract.PropItem, "TORCH"))
+	s.add(extract.LayerMonsters, "TROGLODYTE", extract.KindMonster, 1, 0, tiled.Int(extract.PropMonster, 0x22), tiled.Int(extract.PropFacing, 2))
+	s.add(extract.LayerItems, "TORCH", extract.KindItem, 3, 0, tiled.Int(extract.PropItem, 5))
 	s.add(extract.LayerEvents, "a draft", extract.KindEvent, 3, 0, tiled.Int(extract.PropAction, 1), tiled.Str(extract.PropText, "A DRAFT\nBLOWS."))
 	m, err := s.read(Options{})
 	if err != nil {
@@ -154,7 +154,8 @@ func TestRecordsFollowTiledsObjectIds(t *testing.T) {
 	s.entry("in", 0, 0, 0)
 	s.add(extract.LayerMonsters, "first", extract.KindMonster, 0, 0, tiled.Int(extract.PropMonster, 0x22))
 	s.add(extract.LayerItems, "second", extract.KindItem, 0, 0, tiled.Int(extract.PropItem, 5))
-	s.add(extract.LayerMonsters, "third", extract.KindMonster, 0, 0, tiled.Int(extract.PropMonster, 0x22), tiled.Int(PropCount, 2))
+	s.add(extract.LayerMonsters, "third", extract.KindMonster, 0, 0, tiled.Int(extract.PropMonster, 0x22))
+	s.add(extract.LayerMonsters, "third", extract.KindMonster, 0, 0, tiled.Int(extract.PropMonster, 0x22))
 	// Tiled keeps a layer's objects in drawing order, which a user may change.
 	l := s.layer(extract.LayerMonsters)
 	l.Objects[0], l.Objects[1] = l.Objects[1], l.Objects[0]
@@ -171,12 +172,12 @@ func TestRecordsFollowTiledsObjectIds(t *testing.T) {
 	}
 }
 
-func TestMonstersAndItemsByNameOrNumber(t *testing.T) {
+func TestMonstersAndItemsByNumber(t *testing.T) {
 	s := newSketch(t, 1, 1)
 	s.entry("in", 0, 0, 0)
-	s.add(extract.LayerMonsters, "", extract.KindMonster, 0, 0, tiled.Str(extract.PropMonster, "0x22"))
+	s.add(extract.LayerMonsters, "", extract.KindMonster, 0, 0, tiled.Int(extract.PropMonster, 0x22))
 	s.add(extract.LayerMonsters, "", extract.KindMonster, 0, 0, tiled.Int(extract.PropMonster, 0x15), tiled.Int(extract.PropAmount, 7), tiled.Int(extract.PropUses, 0x22))
-	s.add(extract.LayerItems, "", extract.KindItem, 0, 0, tiled.Str(extract.PropItem, "5"), tiled.Int(extract.PropGate, 0xFF))
+	s.add(extract.LayerItems, "", extract.KindItem, 0, 0, tiled.Int(extract.PropItem, 5), tiled.Int(extract.PropGate, 0xFF))
 	s.add(extract.LayerMonsters, "", extract.KindActor, 0, 0, tiled.Int(extract.PropMonster, 0x13), tiled.Int(extract.PropFacing, 3))
 	m, err := s.read(Options{})
 	if err != nil {
@@ -186,6 +187,31 @@ func TestMonstersAndItemsByNameOrNumber(t *testing.T) {
 	for i, r := range m.Caves[0].Records {
 		if r.Bytes() != want[i] {
 			t.Errorf("record %d: % X, want % X", i, r.Bytes(), want[i])
+		}
+	}
+}
+
+// The extracted levels carry one object a record with the type's number; a map of one's own takes no
+// other form, so the two kinds of map read the same.
+func TestOnlyTheExtractorsFormIsTaken(t *testing.T) {
+	for _, c := range []struct {
+		what  string
+		layer string
+		kind  string
+		props []tiled.Property
+		want  string
+	}{
+		{"a monster by name", extract.LayerMonsters, extract.KindMonster, []tiled.Property{tiled.Str(extract.PropMonster, "TROGLODYTE")}, "wotes.monster must be the battle type's number"},
+		{"a monster by a number written as text", extract.LayerMonsters, extract.KindMonster, []tiled.Property{tiled.Str(extract.PropMonster, "0x22")}, "wotes.monster must be the battle type's number"},
+		{"an item by name", extract.LayerItems, extract.KindItem, []tiled.Property{tiled.Str(extract.PropItem, "TORCH")}, "wotes.item must be the item's number"},
+		{"a count", extract.LayerMonsters, extract.KindMonster, []tiled.Property{tiled.Int(extract.PropMonster, 0x22), tiled.Int("wotes.count", 2)}, "wotes.count: place one object a monster, as the extracted levels do"},
+	} {
+		s := newSketch(t, 1, 1)
+		s.entry("in", 0, 0, 0)
+		s.add(c.layer, "", c.kind, 0, 0, c.props...)
+		_, err := s.read(Options{})
+		if err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("%s: error %v, want one containing %q", c.what, err, c.want)
 		}
 	}
 }
@@ -281,19 +307,17 @@ func TestReadRefusals(t *testing.T) {
 		}, "the text has 10 lines, a dungeon text may have 9"},
 		{"a letter the font has not", func(s *sketch) { event(s, tiled.Int(extract.PropAction, 1), tiled.Str(extract.PropText, "Hello")) }, `line 1 of the text has 'e', which the dungeon font cannot draw`},
 		{"an amount past a byte", func(s *sketch) { event(s, tiled.Int(extract.PropAction, 1), tiled.Int(extract.PropAmount, 256)) }, "wotes.amount must be a whole number from 0 to 255"},
-		{"an item the game has not", func(s *sketch) { s.add("items", "x", extract.KindItem, 0, 0, tiled.Str(extract.PropItem, "LANTERN")) }, `the game has no item called "LANTERN"`},
-		{"an item without its property", func(s *sketch) { s.add("items", "x", extract.KindItem, 0, 0) }, "wotes.item is missing: the item's name or number"},
+		{"an item without its property", func(s *sketch) { s.add("items", "x", extract.KindItem, 0, 0) }, "wotes.item is missing: the item's number"},
 		{"an item past the last", func(s *sketch) { s.add("items", "x", extract.KindItem, 0, 0, tiled.Int(extract.PropItem, 236)) }, "item 0xec: the game's items run 1 to 0xeb"},
-		{"a monster the game has not", func(s *sketch) { monster(s, tiled.Str(extract.PropMonster, "GRUE")) }, `the game has no monster called "GRUE"`},
 		{"a monster of the outdoor roster", func(s *sketch) { monster(s, tiled.Int(extract.PropMonster, 0x62)) }, "battle type 0x62 is no dungeon monster; they run 0x13 to 0x61"},
 		{"a monster the game's levels do not hold", func(s *sketch) { monster(s, tiled.Int(extract.PropMonster, 0x30)) }, "wotes.amount is missing, and the game's levels hold no monster of this type to take it from"},
-		{"no monster at all", func(s *sketch) { monster(s, tiled.Int(extract.PropMonster, 0x22), tiled.Int(PropCount, 0)) }, "wotes.count must be at least 1"},
 		{"a gate of the game's", func(s *sketch) { event(s, tiled.Int(extract.PropAction, 1), tiled.Int(extract.PropGate, 0x13)) }, "wotes.gate 0x13 is one of the game's own flags; new levels use 0x44 to 0xf6"},
 		{"a flag of the game's", func(s *sketch) { event(s, tiled.Int(extract.PropAction, 1), tiled.Int(extract.PropFlag, 0xF7)) }, "wotes.flag 0xf7 is one of the game's own flags"},
 		{"a monster gated as an item is", func(s *sketch) { monster(s, tiled.Int(extract.PropMonster, 0x22), tiled.Int(extract.PropGate, 0xFF)) }, "wotes.gate 0xff is one of the game's own flags"},
 		{"more records than a level places", func(s *sketch) {
-			monster(s, tiled.Int(extract.PropMonster, 0x22), tiled.Int(PropCount, 127))
-			monster(s, tiled.Int(extract.PropMonster, 0x22))
+			for i := 0; i < 128; i++ {
+				monster(s, tiled.Int(extract.PropMonster, 0x22))
+			}
 		}, `the cave of entry point "a" has 128 records; a level places 127`},
 		{"an exit to nowhere", func(s *sketch) { s.add("transitions", "out", extract.KindExit, 0, 0) }, "an exit names an entrance of the land map in wotes.to, or one of the game's by number in wotes.entrance"},
 		{"stairs to nowhere", func(s *sketch) { s.add("transitions", "down", extract.KindStairs, 0, 0) }, "a staircase names an entry point in wotes.to, or one of the game's stairs records by number in wotes.value"},

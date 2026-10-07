@@ -81,7 +81,7 @@ func twoCaves(t *testing.T, dir string, land *tiled.Map) *caveMap {
 	c.add(extract.LayerTransitions, "round", extract.KindStairs, 3, 0, tiled.Str(dungeon.PropTo, "b"))
 	c.add(extract.LayerTransitions, "up", extract.KindStairs, 3, 0, tiled.Str(dungeon.PropTo, "a"))
 	c.add(extract.LayerEvents, "a note", extract.KindEvent, 3, 0, tiled.Int(extract.PropAction, 1), tiled.Str(extract.PropText, "MIND\nTHE STEP."), tiled.Int(extract.PropFlag, 0x50))
-	c.add(extract.LayerMonsters, "a troglodyte", extract.KindMonster, 3, 0, tiled.Str(extract.PropMonster, "TROGLODYTE"), tiled.Int(extract.PropGate, 0x51))
+	c.add(extract.LayerMonsters, "TROGLODYTE", extract.KindMonster, 3, 0, tiled.Int(extract.PropMonster, 0x22), tiled.Int(extract.PropGate, 0x51))
 	c.save()
 	transitions := &land.Layers[4]
 	transitions.Objects = append(transitions.Objects,
