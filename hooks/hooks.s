@@ -128,7 +128,9 @@ region_name_hook:
 
 | Terrain id. game_terrain_id turns the area id into the terrain id the three music pickers
 | and the encounter roll index their tables with; area id 4 is terrain 0x0D, a slot no tile
-| classification reaches. Touches d0, which every arm of the classifier overwrites.
+| classification reaches, or terrain 6, the lava pit's, while ram_on_lava is set: the Tradeway's
+| door sets it (below) so the fights there sound as they do from the valley, and outdoors the land
+| has no lava to set it. Touches d0, which every arm of the classifier overwrites.
     .section .hook_012F38,"ax"
     jsr     terrain_id_hook
     .section .orig_012F38,""
@@ -139,13 +141,41 @@ terrain_id_hook:
     cmpi.w  #4,%d0
     bne.s   1f
     moveq   #0x0d,%d0
-    addq.l  #4,%sp
+    tst.b   ram_on_lava
+    beq.s   3f
+    moveq   #6,%d0
+3:  addq.l  #4,%sp
     rts                                  | out of game_terrain_id with the answer
 1:  cmpi.w  #2,%d0
     beq.s   2f
     addq.l  #4,%sp
     jmp     game_terrain_id_other
 2:  rts                                  | the jungle: back to the moveq #0xb after the hook
+
+| Dungeon music. game_enter_dungeon starts the wandering track of the terrain the party stands
+| on before the dungeon runs, and nothing underground picks another, so a dungeon sounds like its
+| door: the Tradeway's valley door stands on lava, whose flag makes game_music_wander play the
+| lava pit's track. From the land's door, map 0x0C, the flag is set here instead, and the track
+| byte cleared so the picker starts the lava pit's track at once over the land's, as the camp's
+| MUSIC toggle restarts a track; the first outdoor frame back on the land clears the flag again.
+| The land's own caves keep the land's track. Eight bytes: the timer clear and the picker's call.
+| Touches nothing the picker does not; a2 is the entrance record's second long.
+    .section .hook_01044A,"ax"
+    jsr     dungeon_music_hook
+    nop
+    .section .orig_01044A,""
+    .byte   0x51,0xf8,0xa9,0x0f,0x4e,0xb8,0x4e,0xdc
+
+    .text
+dungeon_music_hook:
+    sf      ram_music_timer
+    cmpi.b  #4,ram_region
+    bne.s   1f
+    cmpi.b  #0x0c,1(%a2)                 | the record's map byte
+    bne.s   1f
+    st      ram_on_lava
+    st      ram_music_track
+1:  jmp     game_music_wander
 
 | Encounter groups. The roll indexes a thirteen-pointer table with the terrain id, and the slot
 | terrain 0x0D would read is code, so its list is the one of the spawn area the party stands in;
@@ -536,6 +566,49 @@ land_speech_next:
     bne.s   1b
 2:  move.w  #0x9200,(%a5)
     clr.b   ram_scene
+    rts
+
+| Shops at game level 4. The game reaches level 4 only for the walk home, and game_shop was
+| written for levels 0 to 3: its greeting table has four texts a shop, so level 4 reads the next
+| shop's first, and its price adjuster moves every price by a quarter of itself per level, so at
+| level 4 buying costs double and selling pays the price's remainder by four, 0 to 3 gold, which
+| the shop refuses as nothing. In the land the shops stay open after the merchant's quest raises
+| the level, so both read the level as 3 at most. Eight bytes each: the register clear, the
+| level read and the instruction after it, redone here. Each touches only the registers those
+| instructions set.
+    .section .hook_00C504,"ax"
+    jsr     shop_greeting_hook
+    nop
+    .section .orig_00C504,""
+    .byte   0x74,0x00,0x14,0x38,0x8f,0x3e,0x66,0x30
+
+    .text
+shop_greeting_hook:
+    moveq   #0,%d2
+    move.b  ram_game_level,%d2
+    cmpi.b  #3,%d2
+    ble.s   1f
+    moveq   #3,%d2
+1:  tst.b   %d2
+    beq.s   2f
+    addq.l  #4,%sp
+    jmp     game_shop_greeting           | past the caravan's level-0 test, as the replaced bne.b went
+2:  rts
+
+    .section .hook_00CEC2,"ax"
+    jsr     shop_price_hook
+    nop
+    .section .orig_00CEC2,""
+    .byte   0x72,0x00,0x12,0x38,0x8f,0x3e,0x70,0x1f
+
+    .text
+shop_price_hook:
+    moveq   #0,%d1
+    move.b  ram_game_level,%d1
+    cmpi.b  #3,%d1
+    ble.s   1f
+    moveq   #3,%d1
+1:  moveq   #0x1f,%d0                    | the 32 prices the adjuster's loop counts down
     rts
 
 | Pictures. game_draw_picture's script loop ends each frame, after its vblank wait, on a test of
