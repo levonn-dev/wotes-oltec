@@ -3933,7 +3933,7 @@
                         {
                          "name":"wotes.uses",
                          "type":"int",
-                         "value":49
+                         "value":52
                         }],
                  "rotation":0,
                  "type":"Monster",
@@ -3987,7 +3987,7 @@
                         {
                          "name":"wotes.uses",
                          "type":"int",
-                         "value":49
+                         "value":52
                         }],
                  "rotation":0,
                  "type":"Monster",
@@ -4041,7 +4041,7 @@
                         {
                          "name":"wotes.uses",
                          "type":"int",
-                         "value":49
+                         "value":52
                         }],
                  "rotation":0,
                  "type":"Monster",
@@ -4095,7 +4095,7 @@
                         {
                          "name":"wotes.uses",
                          "type":"int",
-                         "value":17
+                         "value":50
                         }],
                  "rotation":0,
                  "type":"Monster",
@@ -4149,7 +4149,7 @@
                         {
                          "name":"wotes.uses",
                          "type":"int",
-                         "value":17
+                         "value":50
                         }],
                  "rotation":0,
                  "type":"Monster",
@@ -4257,7 +4257,7 @@
                         {
                          "name":"wotes.uses",
                          "type":"int",
-                         "value":17
+                         "value":50
                         }],
                  "rotation":0,
                  "type":"Monster",
@@ -4311,7 +4311,7 @@
                         {
                          "name":"wotes.uses",
                          "type":"int",
-                         "value":17
+                         "value":50
                         }],
                  "rotation":0,
                  "type":"Monster",
@@ -4365,7 +4365,7 @@
                         {
                          "name":"wotes.uses",
                          "type":"int",
-                         "value":17
+                         "value":50
                         }],
                  "rotation":0,
                  "type":"Monster",
@@ -4419,7 +4419,7 @@
                         {
                          "name":"wotes.uses",
                          "type":"int",
-                         "value":49
+                         "value":52
                         }],
                  "rotation":0,
                  "type":"Monster",
@@ -4473,7 +4473,7 @@
                         {
                          "name":"wotes.uses",
                          "type":"int",
-                         "value":49
+                         "value":52
                         }],
                  "rotation":0,
                  "type":"Monster",
@@ -4527,7 +4527,7 @@
                         {
                          "name":"wotes.uses",
                          "type":"int",
-                         "value":49
+                         "value":52
                         }],
                  "rotation":0,
                  "type":"Monster",
@@ -4581,7 +4581,7 @@
                         {
                          "name":"wotes.uses",
                          "type":"int",
-                         "value":49
+                         "value":52
                         }],
                  "rotation":0,
                  "type":"Monster",
@@ -4905,7 +4905,7 @@
                         {
                          "name":"wotes.uses",
                          "type":"int",
-                         "value":17
+                         "value":50
                         }],
                  "rotation":0,
                  "type":"Monster",
@@ -4959,7 +4959,7 @@
                         {
                          "name":"wotes.uses",
                          "type":"int",
-                         "value":17
+                         "value":50
                         }],
                  "rotation":0,
                  "type":"Monster",
@@ -5284,7 +5284,7 @@
                         {
                          "name":"wotes.uses",
                          "type":"int",
-                         "value":17
+                         "value":50
                         }],
                  "rotation":0,
                  "type":"Monster",
@@ -5338,7 +5338,7 @@
                         {
                          "name":"wotes.uses",
                          "type":"int",
-                         "value":17
+                         "value":50
                         }],
                  "rotation":0,
                  "type":"Monster",
