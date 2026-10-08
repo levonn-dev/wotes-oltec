@@ -37,6 +37,35 @@ func TestTriggerBytes(t *testing.T) {
 	}
 }
 
+// An event record points at its block: the text, the after-text or 0, then the picture, the item and the
+// flag as bytes, padded to a word.
+func TestEventBytes(t *testing.T) {
+	res := &convert.Result{Name: "land",
+		Triggers: []convert.Trigger{
+			{Name: "merchant", X0: 0x100, Y0: 0x110, X1: 0x11F, Y1: 0x11F, Level: 4, Kind: convert.TriggerEvent, Shop: -1, Text: 0, Event: &convert.Event{Flag: 0x52, Item: 231, ItemName: "MEDALLION", Picture: 4, After: 1}},
+			{Name: "stone", X0: 0x200, Y0: 0x210, X1: 0x21F, Y1: 0x21F, Level: 4, Kind: convert.TriggerEvent, Shop: -1, Text: 2, Event: &convert.Event{Flag: 0x44, After: -1}}},
+		Texts: [][]string{{"SHE HANDS YOU A MEDALLION."}, {"GO WELL."}, {"A STONE."}}}
+	got := Assembler(res, "maps/land.tmj")
+	for _, want := range []string{
+		"land_triggers:\n    .short  0x0110, 0x011F, 0x0100, 0x011F | merchant\n    .byte   4, 4\n    .long   land_event_0\n    .short  0x0210, 0x021F, 0x0200, 0x021F | stone\n    .byte   4, 4\n    .long   land_event_1\n    .short  0xFFFF\n",
+		"land_event_0:\n    .long   land_text_0, land_text_1\n    .byte   4, 231, 0x52, 0\n",
+		"land_event_1:\n    .long   land_text_2, 0\n    .byte   0, 0, 0x44, 0\n",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("assembler lacks %q:\n%s", want, got)
+		}
+	}
+	report := Report(res, "maps/land.tmj")
+	for _, want := range []string{
+		"trigger merchant: event, flag 0x52, item 231 MEDALLION, picture 4, a text afterwards, level 4, (256, 272) to (287, 287)\n",
+		"trigger stone: event, flag 0x44, level 4, (512, 528) to (543, 543)\n",
+	} {
+		if !strings.Contains(report, want) {
+			t.Errorf("report lacks %q:\n%s", want, report)
+		}
+	}
+}
+
 // A quote or a backslash in a text is escaped for .asciz.
 func TestAscizEscape(t *testing.T) {
 	if got := asciz(`SAY "HI" \ GO`); got != `    .asciz  "SAY \"HI\" \\ GO"`+"\n" {

@@ -17,6 +17,7 @@ const (
 	TriggerShop    = 1
 	TriggerRestore = 2
 	TriggerSpeech  = 3
+	TriggerEvent   = 4
 )
 
 // LevelAlways is the level byte of a trigger that fires at every game level, the highest there is.
@@ -28,12 +29,21 @@ const FigureLine = 3
 // MaxSlot is the highest slot word a figure may hold: the pacer bytes from 0xFF8EE8 that the figure tile loader clears end at 0xFF8EFB, and 0x14 on is the townsfolk's.
 const MaxSlot = 0x13
 
-// Trigger is an inclusive party-pixel rectangle; Shop and Text (an index into Result.Texts) are -1 when unused.
+// Trigger is an inclusive party-pixel rectangle; Shop and Text (an index into Result.Texts) are -1 when unused,
+// and Event is nil unless the kind is TriggerEvent.
 type Trigger struct {
 	Name           string
 	X0, Y0, X1, Y1 int
 	Level, Kind    int
 	Shop, Text     int
+	Event          *Event
+}
+
+// Event is what an event trigger does once, Flag marking it done: it hands over Item (0 for none) and shows
+// quest picture Picture (0 for none); on every later entry it shows the text After (an index into Result.Texts, -1 for none).
+type Event struct {
+	Flag, Item, Picture, After int
+	ItemName                   string
 }
 
 // Figure is a placed figure; X and Y are the record's party-pixel position, not the tile object's corner.
@@ -88,7 +98,7 @@ func (c *converter) objects(m *tiled.Map, infos []*tilesetInfo, ll *landLayers, 
 	}
 	if ll.triggers != nil {
 		for _, o := range ll.triggers.Objects {
-			tr, err := trigger(o, res)
+			tr, err := c.trigger(o, res)
 			if err != nil {
 				return objectErr(path, extract.LayerTriggers, o, err)
 			}
@@ -135,8 +145,8 @@ func inMap(x0, y0, x1, y1 int) bool {
 	return x0 >= 0 && y0 >= 0 && x1 < rom.MapPixels && y1 < rom.MapPixels && x1 >= x0 && y1 >= y0
 }
 
-// trigger reads a special-place rectangle and, for a restore or a speech, its text.
-func trigger(o tiled.Object, res *Result) (Trigger, error) {
+// trigger reads a special-place rectangle and, for a restore, a speech or an event, its text.
+func (c *converter) trigger(o tiled.Object, res *Result) (Trigger, error) {
 	if err := checkName(o.Name); err != nil {
 		return Trigger{}, err
 	}
@@ -157,6 +167,13 @@ func trigger(o tiled.Object, res *Result) (Trigger, error) {
 	text := tiled.StringProp(o.Properties, extract.PropText)
 	shop, hasShop := tiled.IntProp(o.Properties, extract.PropShop)
 	kind := tiled.StringProp(o.Properties, extract.PropKind)
+	if kind != extract.KindEvent {
+		for _, p := range []string{extract.PropFlag, extract.PropItem, extract.PropPicture, extract.PropAfter} {
+			if _, has := tiled.IntProp(o.Properties, p); has || tiled.StringProp(o.Properties, p) != "" {
+				return Trigger{}, fmt.Errorf("%s is for events", p)
+			}
+		}
+	}
 	switch kind {
 	case extract.KindShop:
 		if !hasShop || shop < 0 || shop >= rom.ShopCount {
@@ -166,27 +183,81 @@ func trigger(o tiled.Object, res *Result) (Trigger, error) {
 			return Trigger{}, fmt.Errorf("a shop has no %s", extract.PropText)
 		}
 		t.Kind, t.Shop = TriggerShop, shop
-	case extract.KindRestore, extract.KindSpeech:
+	case extract.KindRestore, extract.KindSpeech, extract.KindEvent:
 		if hasShop {
 			return Trigger{}, fmt.Errorf("%s is for shops", extract.PropShop)
 		}
 		if text == "" {
-			return Trigger{}, fmt.Errorf("a %s needs %s, its lines separated by newlines", kind, extract.PropText)
+			a := "a"
+			if kind == extract.KindEvent {
+				a = "an"
+			}
+			return Trigger{}, fmt.Errorf("%s %s needs %s, its lines separated by newlines", a, kind, extract.PropText)
 		}
-		lines := strings.Split(text, "\n")
-		if err := rom.CheckMessage(lines); err != nil {
+		var err error
+		if t.Text, err = message(text, res); err != nil {
 			return Trigger{}, err
 		}
-		t.Kind = TriggerRestore
-		if kind == extract.KindSpeech {
+		switch kind {
+		case extract.KindRestore:
+			t.Kind = TriggerRestore
+		case extract.KindSpeech:
 			t.Kind = TriggerSpeech
+		default:
+			t.Kind = TriggerEvent
+			if t.Event, err = c.event(o, res); err != nil {
+				return Trigger{}, err
+			}
 		}
-		res.Texts = append(res.Texts, lines)
-		t.Text = len(res.Texts) - 1
 	default:
-		return Trigger{}, fmt.Errorf("%s %q is not %s, %s or %s", extract.PropKind, kind, extract.KindShop, extract.KindRestore, extract.KindSpeech)
+		return Trigger{}, fmt.Errorf("%s %q is not %s, %s, %s or %s", extract.PropKind, kind, extract.KindShop, extract.KindRestore, extract.KindSpeech, extract.KindEvent)
 	}
 	return t, nil
+}
+
+// message checks a text's lines and adds them to the map's texts, returning their index.
+func message(text string, res *Result) (int, error) {
+	lines := strings.Split(text, "\n")
+	if err := rom.CheckMessage(lines); err != nil {
+		return 0, err
+	}
+	res.Texts = append(res.Texts, lines)
+	return len(res.Texts) - 1, nil
+}
+
+// event reads what an event does: the flag that marks it done, and its optional item, quest picture and after-text.
+func (c *converter) event(o tiled.Object, res *Result) (*Event, error) {
+	e := &Event{After: -1}
+	free := c.opt.Game.Layout.Dungeons.Flags
+	flag, has := tiled.IntProp(o.Properties, extract.PropFlag)
+	if !has {
+		return nil, fmt.Errorf("an event needs %s, the event flag that marks it done, from %#x to %#x", extract.PropFlag, int(free.First), int(free.Last))
+	}
+	// The game's own quest flags lie outside the free range; an event may set only a free one.
+	if flag < int(free.First) || flag > int(free.Last) {
+		return nil, fmt.Errorf("%s %#x is one of the game's own flags; an event sets one from %#x to %#x", extract.PropFlag, flag, int(free.First), int(free.Last))
+	}
+	e.Flag = flag
+	if item, has := tiled.IntProp(o.Properties, extract.PropItem); has {
+		name, err := c.opt.Game.ItemName(item)
+		if err != nil {
+			return nil, err
+		}
+		e.Item, e.ItemName = item, name
+	}
+	if picture, has := tiled.IntProp(o.Properties, extract.PropPicture); has {
+		if picture < 1 || picture > rom.QuestPictures {
+			return nil, fmt.Errorf("%s %d is outside 1 to %d, the game's quest pictures", extract.PropPicture, picture, rom.QuestPictures)
+		}
+		e.Picture = picture
+	}
+	if after := tiled.StringProp(o.Properties, extract.PropAfter); after != "" {
+		var err error
+		if e.After, err = message(after, res); err != nil {
+			return nil, fmt.Errorf("%s: %v", extract.PropAfter, err)
+		}
+	}
+	return e, nil
 }
 
 // standingSlots is the animation slots a standing figure indexes: the game keeps three for them.

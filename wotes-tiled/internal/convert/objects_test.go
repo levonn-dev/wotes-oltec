@@ -114,6 +114,31 @@ func TestFigureFront(t *testing.T) {
 	}
 }
 
+// An event fires once: its text, an item the game hands over, a quest picture, then its flag; afterwards
+// its after-text speaks. The item, the picture and the after-text are optional.
+func TestEventTrigger(t *testing.T) {
+	res, err := convertFixture(t, func(_ string, m *tiled.Map) {
+		l := &m.Layers[5]
+		l.Objects[2].Properties = []tiled.Property{tiled.Str(extract.PropKind, extract.KindEvent), tiled.Str(extract.PropText, "SHE HANDS YOU A TORCH."), tiled.Int(extract.PropFlag, 0x52), tiled.Int(extract.PropItem, 5), tiled.Int(extract.PropPicture, 4), tiled.Str(extract.PropAfter, "GO WELL.")}
+		stone := l.Objects[2]
+		stone.ID, stone.Name, stone.X = 9, "stone", 0x400
+		stone.Properties = []tiled.Property{tiled.Str(extract.PropKind, extract.KindEvent), tiled.Str(extract.PropText, "A STONE MARKS THE WAY."), tiled.Int(extract.PropFlag, 0x44)}
+		l.Objects = append(l.Objects, stone)
+		m.NextObjectID = 10
+	})
+	must(t, err)
+	want := []convert.Trigger{
+		{Name: "elder", X0: 0x300, Y0: 0x310, X1: 0x317, Y1: 0x310, Level: convert.LevelAlways, Kind: convert.TriggerEvent, Shop: -1, Text: 1, Event: &convert.Event{Flag: 0x52, Item: 5, ItemName: "TORCH", Picture: 4, After: 2}},
+		{Name: "stone", X0: 0x400, Y0: 0x310, X1: 0x417, Y1: 0x310, Level: convert.LevelAlways, Kind: convert.TriggerEvent, Shop: -1, Text: 3, Event: &convert.Event{Flag: 0x44, After: -1}},
+	}
+	if len(res.Triggers) != 4 || !reflect.DeepEqual(res.Triggers[2:], want) {
+		t.Fatalf("triggers %+v, want %+v", res.Triggers, want)
+	}
+	if want := [][]string{{"THE POOL RESTORES YOU."}, {"SHE HANDS YOU A TORCH."}, {"GO WELL."}, {"A STONE MARKS THE WAY."}}; !reflect.DeepEqual(res.Texts, want) {
+		t.Fatalf("texts %q", res.Texts)
+	}
+}
+
 // A map without object layers, or with empty ones, converts as before.
 func TestNoObjects(t *testing.T) {
 	res, err := convertFixture(t, func(_ string, m *tiled.Map) {
@@ -171,8 +196,32 @@ func TestObjectErrors(t *testing.T) {
 		{"zone on a land map", `wotes.kind "zone" is not entrance; a land map's transitions are entrance points`, func(m *tiled.Map) {
 			set(&m.Layers[transitions].Objects[0], tiled.Str(extract.PropKind, extract.KindZone), tiled.Int(extract.PropIndex, 3))
 		}},
-		{"trigger kind", `layer triggers: object 4 "armour": wotes.kind "trigger" is not shop, restore or speech`, func(m *tiled.Map) {
+		{"trigger kind", `layer triggers: object 4 "armour": wotes.kind "trigger" is not shop, restore, speech or event`, func(m *tiled.Map) {
 			set(&m.Layers[triggers].Objects[0], tiled.Str(extract.PropKind, extract.KindTrigger))
+		}},
+		{"event without text", `object 6 "elder": an event needs wotes.text, its lines separated by newlines`, func(m *tiled.Map) {
+			set(&m.Layers[triggers].Objects[2], tiled.Str(extract.PropKind, extract.KindEvent), tiled.Int(extract.PropFlag, 0x52))
+		}},
+		{"event without flag", "an event needs wotes.flag, the event flag that marks it done, from 0x44 to 0xf6", func(m *tiled.Map) {
+			set(&m.Layers[triggers].Objects[2], tiled.Str(extract.PropKind, extract.KindEvent), tiled.Str(extract.PropText, "HELLO"))
+		}},
+		{"event with the game's flag", "wotes.flag 0x1c is one of the game's own flags; an event sets one from 0x44 to 0xf6", func(m *tiled.Map) {
+			set(&m.Layers[triggers].Objects[2], tiled.Str(extract.PropKind, extract.KindEvent), tiled.Str(extract.PropText, "HELLO"), tiled.Int(extract.PropFlag, 0x1C))
+		}},
+		{"event picture", "wotes.picture 5 is outside 1 to 4, the game's quest pictures", func(m *tiled.Map) {
+			set(&m.Layers[triggers].Objects[2], tiled.Str(extract.PropKind, extract.KindEvent), tiled.Str(extract.PropText, "HELLO"), tiled.Int(extract.PropFlag, 0x52), tiled.Int(extract.PropPicture, 5))
+		}},
+		{"event item", "item 0xec: the game's items run 1 to 0xeb", func(m *tiled.Map) {
+			set(&m.Layers[triggers].Objects[2], tiled.Str(extract.PropKind, extract.KindEvent), tiled.Str(extract.PropText, "HELLO"), tiled.Int(extract.PropFlag, 0x52), tiled.Int(extract.PropItem, 236))
+		}},
+		{"event after-text", `wotes.after: line 1: "g" is not a character the font draws`, func(m *tiled.Map) {
+			set(&m.Layers[triggers].Objects[2], tiled.Str(extract.PropKind, extract.KindEvent), tiled.Str(extract.PropText, "HELLO"), tiled.Int(extract.PropFlag, 0x52), tiled.Str(extract.PropAfter, "go well"))
+		}},
+		{"event with shop", "wotes.shop is for shops", func(m *tiled.Map) {
+			set(&m.Layers[triggers].Objects[2], tiled.Str(extract.PropKind, extract.KindEvent), tiled.Str(extract.PropText, "HELLO"), tiled.Int(extract.PropFlag, 0x52), tiled.Int(extract.PropShop, 1))
+		}},
+		{"speech with an event's flag", "wotes.flag is for events", func(m *tiled.Map) {
+			set(&m.Layers[triggers].Objects[2], tiled.Str(extract.PropKind, extract.KindSpeech), tiled.Str(extract.PropText, "HELLO"), tiled.Int(extract.PropFlag, 0x52))
 		}},
 		{"shop index", "a shop needs wotes.shop from 0 to 3", func(m *tiled.Map) {
 			set(&m.Layers[triggers].Objects[0], tiled.Str(extract.PropKind, extract.KindShop), tiled.Int(extract.PropShop, 4))

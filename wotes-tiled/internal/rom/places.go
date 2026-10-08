@@ -8,12 +8,13 @@ const (
 	GraveyardLimit = 64
 )
 
-// Record and entry sizes of the place tables.
+// Record and entry sizes of the place tables, and the counts of what a place may open or show.
 const (
-	placeRecord = 10 // y0, y1, x0, x1 words, a level byte and an action byte
-	graveRecord = 8  // a position long and a text long
-	pointerSize = 4  // a long to a text or a table
-	ShopCount   = 4
+	placeRecord   = 10 // y0, y1, x0, x1 words, a level byte and an action byte
+	graveRecord   = 8  // a position long and a text long
+	pointerSize   = 4  // a long to a text or a table
+	ShopCount     = 4
+	QuestPictures = 4 // the quest cutscene's pictures, numbered from 1, each raising the game level to its own
 )
 
 // Place is one special-place record: a party-pixel rectangle, inclusive on both ends, that fires its

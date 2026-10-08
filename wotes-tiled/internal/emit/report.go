@@ -53,6 +53,17 @@ func Report(res *convert.Result, source string) string {
 			what = fmt.Sprintf("shop %d", t.Shop)
 		case convert.TriggerSpeech:
 			what = "speech"
+		case convert.TriggerEvent:
+			what = fmt.Sprintf("event, flag 0x%02X", t.Event.Flag)
+			if t.Event.Item != 0 {
+				what += fmt.Sprintf(", item %d %s", t.Event.Item, t.Event.ItemName)
+			}
+			if t.Event.Picture != 0 {
+				what += fmt.Sprintf(", picture %d", t.Event.Picture)
+			}
+			if t.Event.After >= 0 {
+				what += ", a text afterwards"
+			}
 		}
 		fmt.Fprintf(&sb, "trigger %s: %s, level %d, (%d, %d) to (%d, %d)\n", t.Name, what, t.Level, t.X0, t.Y0, t.X1, t.Y1)
 	}

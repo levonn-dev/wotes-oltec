@@ -65,13 +65,16 @@ const (
 	PropEncounter = "wotes.encounter"
 )
 
-// The vocabulary of a land map's own object layers: the trigger kinds, the shop index, the figures' palette
-// line and the three movements a figure may have.
+// The vocabulary of a land map's own object layers: the trigger kinds (an event trigger is KindEvent, the
+// dungeons' word), the shop index, an event's quest picture and after-text, the figures' palette line and
+// the three movements a figure may have.
 const (
 	KindShop          = "shop"
 	KindRestore       = "restore"
 	KindSpeech        = "speech"
 	PropShop          = "wotes.shop"
+	PropPicture       = "wotes.picture" // a quest picture, 1 to rom.QuestPictures
+	PropAfter         = "wotes.after"   // the text an event shows once its flag is set
 	PropFigureColours = "wotes.figure_colours"
 	PropFront         = "wotes.front" // drawn in front of every other sprite
 	MovesStands       = "stands"

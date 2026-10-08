@@ -118,15 +118,33 @@ func objects(sb *strings.Builder, res *convert.Result) {
 	n := res.Name
 	if len(res.Triggers) > 0 {
 		fmt.Fprintf(sb, "\n%s_triggers:\n", n)
+		events := 0
 		for _, t := range res.Triggers {
 			fmt.Fprintf(sb, "    .short  0x%04X, 0x%04X, 0x%04X, 0x%04X | %s\n    .byte   %d, %d\n", t.Y0, t.Y1, t.X0, t.X1, t.Name, t.Level, t.Kind)
-			if t.Kind == convert.TriggerShop {
+			switch t.Kind {
+			case convert.TriggerShop:
 				fmt.Fprintf(sb, "    .long   %d\n", t.Shop)
-			} else {
+			case convert.TriggerEvent:
+				fmt.Fprintf(sb, "    .long   %s_event_%d\n", n, events)
+				events++
+			default:
 				fmt.Fprintf(sb, "    .long   %s_text_%d\n", n, t.Text)
 			}
 		}
 		sb.WriteString("    .short  0xFFFF\n")
+		// An event's block: its text, its after-text or 0, then the picture, the item and the flag, padded to a word.
+		events = 0
+		for _, t := range res.Triggers {
+			if t.Kind != convert.TriggerEvent {
+				continue
+			}
+			after := "0"
+			if t.Event.After >= 0 {
+				after = fmt.Sprintf("%s_text_%d", n, t.Event.After)
+			}
+			fmt.Fprintf(sb, "%s_event_%d:\n    .long   %s_text_%d, %s\n    .byte   %d, %d, 0x%02X, 0\n", n, events, n, t.Text, after, t.Event.Picture, t.Event.Item, t.Event.Flag)
+			events++
+		}
 	}
 	if len(res.Texts) > 0 {
 		fmt.Fprintf(sb, "\n%s_texts:\n", n)
