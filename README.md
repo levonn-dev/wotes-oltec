@@ -22,7 +22,7 @@ New code lives in the 2 MB expansion as 68000 assembly and C, reached through si
 - [x] The caves of the land and the Oltec dungeon behind them, drawn in Tiled as one map that the build turns into the game's own levels.
 - [x] The dungeon's second pass: its monsters, treasure and texts.
 - [ ] The region's own map screen, drawn from the finished land.
-- [ ] The merchant meeting moved into the land, with the medallion and the quest picture it grants restored.
+- [x] The merchant meeting moved into the land, with the medallion and the quest picture it grants restored.
 
 ## Prerequisites
 

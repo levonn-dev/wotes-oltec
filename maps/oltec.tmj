@@ -1869,6 +1869,49 @@
                  "width":51.6666666666666,
                  "x":347,
                  "y":1404
+                }, 
+                {
+                 "height":16,
+                 "id":61,
+                 "name":"merchant",
+                 "opacity":1,
+                 "properties":[
+                        {
+                         "name":"wotes.after",
+                         "type":"string",
+                         "value":"THE TRADE ROUTE IS OPEN.\nMAY THE SUN LIGHT YOUR\nWAY HOME."
+                        }, 
+                        {
+                         "name":"wotes.flag",
+                         "type":"int",
+                         "value":82
+                        }, 
+                        {
+                         "name":"wotes.item",
+                         "type":"int",
+                         "value":231
+                        }, 
+                        {
+                         "name":"wotes.kind",
+                         "type":"string",
+                         "value":"event"
+                        }, 
+                        {
+                         "name":"wotes.picture",
+                         "type":"int",
+                         "value":4
+                        }, 
+                        {
+                         "name":"wotes.text",
+                         "type":"string",
+                         "value":"YOU MEET AN OLTEC MERCHANT\nWHO OFFERS TO HELP YOUR\nPEOPLE IN EXCHANGE FOR\nYOUR OPENING THIS NEW\nTRADE ROUTE. SHE HANDS\nYOU A NOTE FOR YOUR DUKE\nAND HER MEDALLION. YOU\nHAVE COMPLETED THE QUEST!"
+                        }],
+                 "rotation":0,
+                 "type":"Trigger",
+                 "visible":true,
+                 "width":32,
+                 "x":1704,
+                 "y":544
                 }],
          "opacity":1,
          "type":"objectgroup",
@@ -2068,7 +2111,7 @@
          "y":0
         }],
  "nextlayerid":9,
- "nextobjectid":61,
+ "nextobjectid":62,
  "orientation":"orthogonal",
  "properties":[
         {

@@ -381,12 +381,21 @@ stairs_hook:
 
 | Special places. game_special_places walks rom_special_places, whose castle records would fire
 | on the land's coordinates; region 4 walks oltec_triggers instead, with the same rectangle,
-| level and latch rules, and its three kinds: 1 opens shop arg through game_shop, 2 shows text
+| level and latch rules, and its four kinds: 1 opens shop arg through game_shop, 2 shows text
 | arg and restores the party as the Waters of Life do, 3 shows text arg and waits for a button
-| as the speeches do. A record is y0 y1 x0 x1 words, a level byte, a kind byte and a long
-| argument; a 0xFFFF word ends the table. The hook covers eight bytes because six would split
-| the move.w at 0xD310; the other regions redo the two replaced instructions and resume at
-| 0xD314. Touches d0, d1 and a0, as the routine does; a5 is the VDP control port.
+| as the speeches do, 4 fires the event block arg once: its text with its quest picture played
+| over the open box as the swamp's curse place has it, raising the game level as
+| game_quest_cutscene would, and played again until a button, which takes the text's page with
+| it;
+| then its item through game_give_item (nobody can take it: the dungeon's refusal sound, and
+| the event waits for the next entry, so a quest item is never lost), then its flag; once the
+| flag is set the block's after-text speaks instead. The picture's tiles land on the first two
+| figure blocks, which are queued again behind it. A record is y0 y1 x0 x1 words, a
+| level byte, a kind byte and a long argument; a 0xFFFF word ends the table. An event block
+| is the text's address, the after-text's or 0, then the picture, the item and the flag as
+| bytes. The hook covers eight bytes because six would split the move.w at 0xD310; the other
+| regions redo the two replaced instructions and resume at 0xD314. Touches d0, d1, a0 and a1,
+| as the routine's own actions do; a5 is the VDP control port.
     .section .hook_00D30C,"ax"
     jsr     special_places_hook
     nop
@@ -396,12 +405,13 @@ stairs_hook:
     .text
 special_places_hook:
     addq.l  #4,%sp                       | the hook stands at the routine's entry: its return is not needed
-    movem.l %d2-%d6,-(%sp)
+    movem.l %d2-%d6,-(%sp)               | the registers the routine itself saves: the other regions resume inside it
     move.w  ram_party_x,%d0
     cmpi.b  #4,ram_region
     beq.s   1f
     jmp     game_special_places_continue
-1:  move.w  ram_party_y,%d1
+1:  move.l  %a2,-(%sp)
+    move.w  ram_party_y,%d1
     lea     oltec_triggers,%a0
 2:  cmpi.w  #-1,(%a0)
     beq     7f                           | no rectangle holds the party: the latch opens again
@@ -425,26 +435,16 @@ special_places_hook:
     beq.s   4f
     subq.b  #1,%d6
     beq.s   5f
+    subq.b  #1,%d6
+    bne.s   6f
     movea.l (%a0),%a0                    | a speech: its text
-    jsr     game_message_box
-    st      ram_scene
-6:  jsr     game_outdoor_frame
-    tst.w   ram_party_alive
-    beq.s   9f
-    jsr     game_read_pad
-    andi.w  #0xf0,%d0
-    beq.s   6b
-    suba.l  %a0,%a0
-    jsr     game_message_box             | the next page, until none is left
-    bne.s   6b
-9:  move.w  #0x9200,(%a5)                | hide the window plane, as the speeches do
-    clr.b   ram_scene
-    bra.s   8f
+    bsr     land_speech
+    bra     8f
 3:  addq.l  #6,%a0                       | past the level, the kind and the argument
     bra     2b
 4:  move.l  (%a0),%d0                    | a shop: its index, as the action table passes it
     jsr     game_shop
-    bra.s   8f
+    bra     8f
 5:  movea.l (%a0),%a0                    | a restore: the Waters of Life sequence with the land's text
     jsr     game_message_box
     moveq   #0x40,%d0
@@ -453,10 +453,119 @@ special_places_hook:
     jsr     game_party_restore
     jsr     game_wait_button
     move.w  #0x9200,(%a5)
+    bra     8f
+6:  movea.l (%a0),%a2                    | an event: its block
+    moveq   #0,%d0
+    move.b  10(%a2),%d0
+    jsr     game_test_event_flag
+    beq.s   9f
+    move.l  4(%a2),%d0                   | done already: its after-text speaks, if it has one
+    beq     8f
+    movea.l %d0,%a0
+    bsr     land_speech
+    bra     8f
+9:  movea.l (%a2),%a0
+    jsr     game_message_box             | the text, with the picture over it as the game's scenes have it
+    moveq   #0,%d0
+    move.b  8(%a2),%d0                   | the quest picture
+    beq     10f
+    subq.w  #1,%d0
+    lea     rom_quest_levels,%a0
+    move.b  (%a0,%d0.w),%d1
+    cmp.b   ram_game_level,%d1
+    ble.s   11f
+    move.b  %d1,ram_game_level
+11: cmpi.b  #4,8(%a2)                    | the merchant's picture opens the castle gate, as game_quest_cutscene has it
+    bne.s   13f
+    sf      ram_castle_gate_shut
+13: lsl.w   #2,%d0
+    lea     rom_quest_pictures,%a0
+    movea.l (%a0,%d0.w),%a0
+    lea     rom_quest_picture_sprites,%a1
+    movea.l (%a1,%d0.w),%a1
+    move.l  #0x00680000,%d0
+    move.l  #0x6000,%d1
+    move.l  %a1,picture_script           | for picture_loop_hook, which plays it again until a button
+    jsr     game_draw_picture
+    lea     rom_city_figure_tiles,%a0    | the picture's tiles ran over the first two figure blocks: load them again
+    moveq   #2,%d0
+    move.l  #0x75E001E0,%d1
+    jsr     game_vdp_queue
+    lea     rom_city_figure_tiles_2,%a0
+    moveq   #2,%d0
+    move.l  #0x79A00240,%d1
+    jsr     game_vdp_queue
+    bsr     land_speech_next             | that button turns the text's page, or closes it with the picture
+    bra.s   14f
+10: bsr     land_speech_wait             | a button, the text's other pages, the box hidden
+14: moveq   #0,%d0
+    move.b  9(%a2),%d0                   | the item
+    beq.s   12f
+    jsr     game_give_item
+    tst.w   %d0
+    bpl.s   12f
+    moveq   #0x36,%d0                    | every pack is full: the dungeon's refusal sound, and the event waits
+    jsr     game_play_sound
+    bra     8f
+12: moveq   #0,%d0
+    move.b  10(%a2),%d0                  | the flag: the event is done
+    jsr     game_set_event_flag
     bra.s   8f
 7:  sf      ram_place_latch
-8:  movem.l (%sp)+,%d2-%d6
+8:  movea.l (%sp)+,%a2
+    movem.l (%sp)+,%d2-%d6
     rts
+
+| A speech: the text at a0, paged on a button until none is left, then the window plane hidden;
+| land_speech_wait does the same for a box already up, land_speech_next for one whose button
+| has already been pressed.
+land_speech:
+    jsr     game_message_box
+land_speech_wait:
+    st      ram_scene
+1:  jsr     game_outdoor_frame
+    tst.w   ram_party_alive
+    beq.s   2f
+    jsr     game_read_pad
+    andi.w  #0xf0,%d0
+    beq.s   1b
+land_speech_next:
+    st      ram_scene
+    suba.l  %a0,%a0
+    jsr     game_message_box             | the next page, until none is left
+    bne.s   1b
+2:  move.w  #0x9200,(%a5)
+    clr.b   ram_scene
+    rts
+
+| Pictures. game_draw_picture's script loop ends each frame, after its vblank wait, on a test of
+| the next script byte: another step, or the tail that returns (the lizard-man picture alone is
+| held still there until a button). In region 4 the picture plays over an event's text, so it
+| plays its script again from picture_script whenever it ends, and a button ends it at once
+| through the drawer's own tail; every other region runs the three replaced instructions. The
+| hook covers eight bytes, the test and its two branches, and jumps back itself. Touches d0,
+| which the loop sets before it reads it.
+    .section .hook_018452,"ax"
+    jsr     picture_loop_hook
+    nop
+    .section .orig_018452,""
+    .byte   0x4a,0x13,0x6c,0x92,0x60,0x00,0x00,0x58
+
+    .text
+picture_loop_hook:
+    addq.l  #4,%sp
+    cmpi.b  #4,ram_region
+    bne.s   1f
+    jsr     game_read_pad                | a button ends the picture at once
+    andi.w  #0xf0,%d0
+    bne.s   2f
+    tst.b   (%a3)
+    bge.s   3f
+    movea.l picture_script,%a3           | the script's end: its first step is read once this one's frames are spent
+3:  jmp     game_draw_picture_loop
+1:  tst.b   (%a3)                        | the game's own test: the next step, or the tail
+    bge.s   3b
+2:  jmp     game_draw_picture_tail
 
 | Figures. game_city_npcs draws rom_city_npcs in the city only; region 4 enters its record loop
 | with oltec_figures instead, past the townsfolk and the level test, and every other region
@@ -533,5 +642,7 @@ land_palette:
     .space  128                          | the ROM palette with the villagers' line, the fade's target in the land
 spawn_area:
     .space  4                            | the record of the spawn area the last countdown reload found the party in, or 0
+picture_script:
+    .space  4                            | the sprite script of the quest picture an event is showing, for its replay
 
     .section .note.GNU-stack,"",%progbits
