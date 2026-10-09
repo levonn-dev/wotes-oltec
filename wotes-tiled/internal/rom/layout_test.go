@@ -97,7 +97,7 @@ func TestLayoutJSONRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Contains(a, []byte(`"mapTable": "0x1145C"`)) || !bytes.Contains(a, []byte(`"count": 40`)) || !bytes.HasSuffix(a, []byte("}\n")) {
+	if !bytes.Contains(a, []byte(`"mapTable": "0x1145C"`)) || !bytes.Contains(a, []byte(`"count": 40`)) || !bytes.Contains(a, []byte(`"chunkLists": "0x9908"`)) || !bytes.HasSuffix(a, []byte("}\n")) {
 		t.Fatalf("dump: %s", a)
 	}
 	l, err := rom.ParseLayout(bytes.NewReader(a))
@@ -128,6 +128,9 @@ func TestParseLayoutRejects(t *testing.T) {
 		{"empty style name", `"name": "elven"`, `"name": ""`, `dungeons.styles[3].name is missing`},
 		{"zero piece count", `"count": 12`, `"count": 0`, `dungeons.pieces.count is missing or zero`},
 		{"zero terrain count", `"terrains": 13`, `"terrains": 0`, `spawns.terrains is missing or zero`},
+		{"zero plane table", `"planes": "0x9918"`, `"planes": "0x0"`, `area.planes is missing or zero`},
+		{"short divisor list", ",\n      {\n        \"x\": \"0x9876\",\n        \"y\": \"0x987A\"\n      }", ``, `area.divisors has 3 entries for 4 regions`},
+		{"short flag list", ",\n      \"0x97CF\"", ``, `area.flags has 3 entries for 4 regions`},
 		{"zero first flag", `"first": "0x44"`, `"first": "0x0"`, `dungeons.flags.first is missing or zero`},
 		{"flags the wrong way round", `"first": "0x44"`, `"first": "0xF7"`, `dungeons.flags runs 0xF7 to 0xF6`},
 		{"a flag past the last a record may name", `"last": "0xF6"`, `"last": "0xFF"`, `it must lie in 1 to 0xFE`},

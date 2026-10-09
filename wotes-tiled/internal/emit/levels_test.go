@@ -18,7 +18,7 @@ func TestEntranceTables(t *testing.T) {
 			{Name: "the\ndoor", Index: 41, X: 0x8F8, Y: 0x518, Map: 39}}}
 	got := Assembler(res, "maps/land.tmj")
 	for _, want := range []string{
-		"land_tiles, land_entrance_regions, land_entrance_points\n",
+		"land_tiles, land_entrance_regions, land_entrance_points, land_area_tiles, land_area_plane, land_area_scale_x, land_area_scale_y, land_area_flag\n",
 		"\n    .balign 2\nland_entrance_regions:\n    .incbin \"clean.md\", 0x10416, 14\n    .byte   4 | entrance 14, tradeway\n    .incbin \"clean.md\", 0x10425, 25\n" +
 			"    .byte   4 | entrance 40, cave_1\n    .byte   4 | entrance 41, the door\n    .byte   0xFF\n",
 		"\n    .balign 2\nland_entrance_points:\n    .incbin \"clean.md\", 0x104EC, 112\n    .short  0x0A08, 0x0920 | entrance 14, tradeway\n    .byte   0, 12, 0, 1\n" +
@@ -60,7 +60,7 @@ func TestLevelTables(t *testing.T) {
 				{Number: 3, Map: m, Cave: second, Style: 0x11624, Graphics: 0xC3EB2}}}}
 	got := Assembler(res, "maps/land.tmj")
 	for _, want := range []string{
-		"land_entrance_regions, land_entrance_points, land_levels, land_level_directory, land_stairs\n",
+		"land_entrance_regions, land_entrance_points, land_levels, land_level_directory, land_stairs, land_area_tiles, land_area_plane, land_area_scale_x, land_area_scale_y, land_area_flag\n",
 		"\n    .balign 2\nland_levels:\n    .incbin \"clean.md\", 0x1145C, 24\n    .long   0x011624, 0x0C3EB2, land_grid_caves | level 2: caves, the cave of cave_1\n" +
 			"    .long   0x011624, 0x0C3EB2, land_grid_caves | level 3: caves, the cave of deep\n",
 		"\n    .balign 2\nland_level_directory:\n    .short  4\n    .long   0x0D6128 - land_level_directory\n    .long   0x0D6200 - land_level_directory\n" +
@@ -78,5 +78,23 @@ func TestLevelTables(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Errorf("assembler lacks %q:\n%s", want, got)
 		}
+	}
+}
+
+// The cave texts end the level tables on any byte, so the area map's word tables after them realign.
+func TestAreaTablesAlignAfterTheCaveTexts(t *testing.T) {
+	m := &dungeon.Map{Name: "caves"}
+	cave := &dungeon.Cave{Entries: []dungeon.Entry{{Name: "cave_1", X: 1, Y: 3}}, Texts: []string{"ASHES!"}}
+	res := &convert.Result{Name: "land", Region: 4, GameEntrances: 1, EntranceAt: [2]int{0x10416, 0x104EC},
+		Entrances: []convert.Entrance{{Name: "cave_1", Index: 1, Map: 2}},
+		Levels: &convert.Levels{MapTable: 0x1145C, Directory: 0xD5E36, StairsTable: 0x10D0A, Game: 2, GameStairs: 1,
+			GameLists: []int{0xD6128, 0xD6200}, GameTexts: []int{0xD5F68, 0xD5F80},
+			Maps:  []convert.LevelMap{{Map: m, Packed: []byte{0, 3, 0x83, 1, 2, 3, 0x80}}},
+			Caves: []convert.Level{{Number: 2, Map: m, Cave: cave, Style: 0x11624, Graphics: 0xC3EB2}}},
+		AreaWidth: 6144, AreaHeight: 6144}
+	got := Assembler(res, "maps/land.tmj")
+	i := strings.Index(got, "land_level_2_text_1:\n    .asciz  \"ASHES!\"\n")
+	if i < 0 || !strings.Contains(got[i:], "    .balign 2\nland_area_tiles:") {
+		t.Fatalf("the area tables do not realign after the cave texts:\n%s", got[max(i, 0):])
 	}
 }

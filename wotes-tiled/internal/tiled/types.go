@@ -29,6 +29,9 @@ func Int(name string, value int) Property { return Property{Name: name, Type: "i
 // Bool makes a bool property.
 func Bool(name string, value bool) Property { return Property{Name: name, Type: "bool", Value: value} }
 
+// File makes a file property: a path relative to the map or tileset that holds it.
+func File(name, value string) Property { return Property{Name: name, Type: "file", Value: value} }
+
 // StringProp returns a string property's value, or "" when it is absent or not a string.
 func StringProp(props []Property, name string) string {
 	for _, p := range props {

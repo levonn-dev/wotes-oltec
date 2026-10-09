@@ -83,6 +83,9 @@ func Run(g *rom.Game, dir string) error {
 	if err := WriteDungeons(g, out); err != nil {
 		return err
 	}
+	if err := WriteArea(g, pal, out); err != nil {
+		return err
+	}
 	for _, reg := range g.Layout.Regions {
 		if err := Region(g, pal, reg, out); err != nil {
 			return err
@@ -154,6 +157,15 @@ func Region(g *rom.Game, pal rom.Palette, reg rom.Region, out string) error {
 		}
 	}
 	m := NewLandMap(reg.Name, tilesets)
+	idx, err := g.Layout.RegionIndex(reg.Name)
+	if err != nil {
+		return err
+	}
+	props, err := areaProps(g, idx, reg)
+	if err != nil {
+		return fmt.Errorf("%s: %v", file, err)
+	}
+	m.Properties = append(m.Properties, props...)
 	m.Layers[0].SetData(groundGIDs)
 	m.Layers[1].SetData(frontGIDs)
 	m.Layers[2].SetData(solid)

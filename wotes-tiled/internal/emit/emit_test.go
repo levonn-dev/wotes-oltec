@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/levonn-dev/wotes-oltec/wotes-tiled/internal/convert"
+	"github.com/levonn-dev/wotes-oltec/wotes-tiled/internal/rom"
 )
 
 func TestDepfile(t *testing.T) {
@@ -24,7 +25,7 @@ func TestTriggerBytes(t *testing.T) {
 		Texts: [][]string{{"HELLO", "THERE"}}}
 	got := Assembler(res, "maps/land.tmj")
 	for _, want := range []string{
-		".globl  land_front, land_ground, land_blocks, land_metatiles, land_tiles, land_triggers, land_texts\n",
+		".globl  land_front, land_ground, land_blocks, land_metatiles, land_tiles, land_triggers, land_texts, land_area_tiles, land_area_plane, land_area_scale_x, land_area_scale_y, land_area_flag\n",
 		"land_triggers:\n    .short  0x0310, 0x0310, 0x0300, 0x0317 | elder\n    .byte   4, 3\n    .long   land_text_0\n    .short  0x0110, 0x012F, 0x0100, 0x012F | armour\n    .byte   3, 1\n    .long   1\n    .short  0xFFFF\n",
 		"land_texts:\nland_text_0:\n    .byte   4, 0\n    .asciz  \"HELLO\"\n    .asciz  \"THERE\"\n    .byte   0\n    .balign 2\n",
 	} {
@@ -85,7 +86,7 @@ func TestSpawnTables(t *testing.T) {
 		SpawnGrid: convert.SpawnGrid{X: 3, Y: 5, W: 4, H: 2, Cells: []byte{1, 1, 1, 1, 1, 2, 2, 1}}}
 	got := Assembler(res, "maps/land.tmj")
 	for _, want := range []string{
-		".globl  land_front, land_ground, land_blocks, land_metatiles, land_tiles, land_spawns, land_spawn_grid\n",
+		".globl  land_front, land_ground, land_blocks, land_metatiles, land_tiles, land_spawns, land_spawn_grid, land_area_tiles, land_area_plane, land_area_scale_x, land_area_scale_y, land_area_flag\n",
 		"land_spawns:\n    .short  90, 1 | hills\n    .long   land_spawn_1\n    .short  0, 0 | camp\n    .long   0\n",
 		"land_spawn_1:\n    .byte   0x74, 0x26, 1, 0 | HAIRY BEASTMAN\n    .byte   0x83, 0x13, 0, 2 | LIZARD MAN\n    .byte   0x74, 0x26, 1, 0 | HAIRY BEASTMAN\n",
 		"land_spawn_grid:\n    .short  3, 5, 4, 2\n    .byte   1, 1, 1, 1\n    .byte   1, 2, 2, 1\n    .balign 2\n",
@@ -113,5 +114,72 @@ func TestNoSpawnTablesWithoutAreas(t *testing.T) {
 	got := Assembler(&convert.Result{Name: "land"}, "maps/land.tmj")
 	if strings.Contains(got, "spawn") {
 		t.Errorf("tables the map has not:\n%s", got)
+	}
+}
+
+func TestAreaSymbols(t *testing.T) {
+	a := &convert.Area{Path: "area/land.png", Tiles: []rom.Tile{{}, {15}}, Flag: 0x53, ScaleX: 111, ScaleY: 56}
+	for i := range a.Cells {
+		a.Cells[i] = rom.MakeWord(rom.AreaFirst+i%2, i%4 == 1, false, rom.AreaLine, false)
+	}
+	res := &convert.Result{Name: "land", Area: a, AreaShared: 0xFD874, AreaWidth: 2880, AreaHeight: 1440}
+	got := Assembler(res, "maps/land.tmj")
+	for _, want := range []string{
+		"land_area_tiles, land_area_plane, land_area_scale_x, land_area_scale_y, land_area_flag\n",
+		"land_area_tiles:\n    .short  0x8011\n    .long   0x0FD874\n    .short  0x2\n    .long   land_area_pixels\n    .short  0\n",
+		"land_area_pixels:\n    .byte   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00\n",
+		"    .byte   0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00\n",
+		"land_area_plane:\n    .byte   ",
+		"land_area_scale_x:\n    .short  111\nland_area_scale_y:\n    .short  56\nland_area_flag:\n    .byte   0x53\n",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("assembler lacks %q:\n%s", want, got)
+		}
+	}
+	// The plane is a bare stream: its first byte is a literal run's opcode, not a count word.
+	i := strings.Index(got, "land_area_plane:\n    .byte   ")
+	if i < 0 || !strings.HasPrefix(got[i+len("land_area_plane:\n    .byte   "):], "0xBF, 0x82, 0x5E, 0x82, 0x5C") {
+		t.Errorf("the plane does not start with a 63-byte literal run of the frame's words:\n%s", got[i:i+120])
+	}
+	if !strings.Contains(got, "    .balign 2\nland_area_scale_x:") {
+		t.Error("the divisors are not aligned after the plane's bytes")
+	}
+	report := Report(res, "maps/land.tmj")
+	if want := "area map: area/land.png, 2 tiles of 582, covers 2880 by 1440, divisors 111 and 56, flag 0x53\n"; !strings.Contains(report, want) {
+		t.Errorf("report lacks %q:\n%s", want, report)
+	}
+}
+
+func TestAreaSymbolsWithoutAPicture(t *testing.T) {
+	res := &convert.Result{Name: "land", AreaWidth: 6144, AreaHeight: 6144}
+	got := Assembler(res, "maps/land.tmj")
+	for _, want := range []string{
+		"land_area_tiles:\n    .short  0\n",
+		"land_area_plane:\n    .byte   0x80\n",
+		"land_area_scale_x:\n    .short  1\nland_area_scale_y:\n    .short  1\nland_area_flag:\n    .byte   0xFF\n",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("assembler lacks %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "land_area_pixels") {
+		t.Error("pixels without a picture")
+	}
+	if want := "area map: none (VIEW MAP refuses)\n"; !strings.Contains(Report(res, "maps/land.tmj"), want) {
+		t.Errorf("report lacks %q", want)
+	}
+}
+
+func TestAreaFlagFromTheStart(t *testing.T) {
+	a := &convert.Area{Path: "area/land.png", Tiles: []rom.Tile{{}}, ScaleX: 237, ScaleY: 237}
+	for i := range a.Cells {
+		a.Cells[i] = rom.MakeWord(rom.AreaFirst, false, false, rom.AreaLine, false)
+	}
+	res := &convert.Result{Name: "land", Area: a, AreaShared: 0xFD874, AreaWidth: 6144, AreaHeight: 6144}
+	if got := Assembler(res, "maps/land.tmj"); !strings.Contains(got, "land_area_flag:\n    .byte   0x00\n") {
+		t.Errorf("flag:\n%s", got)
+	}
+	if want := "flag none (from the start)\n"; !strings.Contains(Report(res, "maps/land.tmj"), want) {
+		t.Errorf("report lacks %q", want)
 	}
 }

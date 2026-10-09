@@ -41,6 +41,7 @@ type Layout struct {
 	Monsters  MonsterTables  `json:"monsters"`
 	Items     ItemTables     `json:"items"`
 	Dungeons  DungeonTables  `json:"dungeons"`
+	Area      AreaTables     `json:"area"`
 }
 
 // Region names one outdoor region's tables and graphics set.
@@ -114,8 +115,8 @@ type ItemTables struct {
 	Count   int  `json:"count"`   // items, the last id
 }
 
-// lastFlag is the last event flag a record may name: bit 0xFF is what an item's 0xFF gate falls through to.
-const lastFlag = 0xFE
+// LastFlag is the last event flag a record may name: bit 0xFF is what an item's 0xFF gate falls through to.
+const LastFlag = 0xFE
 
 // DungeonTables: the dungeon maps.
 type DungeonTables struct {
@@ -153,6 +154,20 @@ type PieceTables struct {
 	Count int  `json:"count"`
 }
 
+// AreaTables: the camp menu's VIEW MAP pictures.
+type AreaTables struct {
+	ChunkLists Addr          `json:"chunkLists"` // a long per region to its tile chunk list, the first entry packed and holding the 17 shared tiles first
+	Planes     Addr          `json:"planes"`     // a long per region to its packed 64 by 32 plane
+	Divisors   []AreaDivisor `json:"divisors"`   // per region, the two divisor words inside the scale code
+	Flags      []Addr        `json:"flags"`      // per region, the immediate byte of the moveq naming the event flag VIEW MAP waits for; 0 where it draws the picture from the start
+}
+
+// AreaDivisor: where a region's two marker divisors sit, each the immediate word of a divu.
+type AreaDivisor struct {
+	X Addr `json:"x"`
+	Y Addr `json:"y"`
+}
+
 // Clean is the clean ROM's layout. The dungeon names are the official guide's, matched to each
 // entrance's position on the guide's maps; the entered level of a multi-level dungeon has no suffix.
 var Clean = Layout{
@@ -183,6 +198,7 @@ var Clean = Layout{
 			"Magic Shop Laboratory", "Shrine Cellar", "Prison Tower", "Northeastern Tower", "Eastern Guard Tower", "Inn Cellar", "Western Guard Tower", "Cemetery Tower", "Elven Underground",
 			"The Catacombs of Doom", "The Web Palace", "Cave Bear Lair", "Winding Cavern", "The Warrens", "The Pits", "Ant Nest", "Passageway Cavern", "The Catacombs of Doom", "Hidden Forest Halls", "The Halls of the Dead",
 		}},
+	Area: AreaTables{ChunkLists: 0x9908, Planes: 0x9918, Divisors: []AreaDivisor{{0x9880, 0x9884}, {0x9880, 0x9884}, {0x986C, 0x9870}, {0x9876, 0x987A}}, Flags: []Addr{0, 0, 0x9807, 0x97CF}},
 }
 
 // Region returns the region called name.
@@ -346,8 +362,19 @@ func (l *Layout) fields() []field {
 	for i, s := range l.Dungeons.Styles {
 		f = append(f, at(fmt.Sprintf("dungeons.styles[%d].descriptor", i), s.Descriptor, styleRecord))
 	}
-	return append(f, at("dungeons.pieces.table", l.Dungeons.Pieces.Table, 2*(l.Dungeons.Pieces.Count+1)),
-		at("dungeons.pieces.sizes", l.Dungeons.Pieces.Sizes, 2*l.Dungeons.Pieces.Count), num("dungeons.pieces.count", l.Dungeons.Pieces.Count))
+	f = append(f, at("dungeons.pieces.table", l.Dungeons.Pieces.Table, 2*(l.Dungeons.Pieces.Count+1)),
+		at("dungeons.pieces.sizes", l.Dungeons.Pieces.Sizes, 2*l.Dungeons.Pieces.Count), num("dungeons.pieces.count", l.Dungeons.Pieces.Count),
+		at("area.chunkLists", l.Area.ChunkLists, pointerSize*len(l.Regions)), at("area.planes", l.Area.Planes, pointerSize*len(l.Regions)))
+	for i, d := range l.Area.Divisors {
+		p := fmt.Sprintf("area.divisors[%d].", i)
+		f = append(f, at(p+"x", d.X, 2), at(p+"y", d.Y, 2))
+	}
+	for i, a := range l.Area.Flags {
+		if a != 0 {
+			f = append(f, at(fmt.Sprintf("area.flags[%d]", i), a, 1))
+		}
+	}
+	return f
 }
 
 // Check reports a missing or zero field, an empty list, or an empty or repeated region name.
@@ -370,6 +397,12 @@ func (l *Layout) Check() error {
 		}
 		seen[reg.Name] = true
 	}
+	if len(l.Area.Divisors) != len(l.Regions) {
+		return fmt.Errorf("layout: area.divisors has %d entries for %d regions", len(l.Area.Divisors), len(l.Regions))
+	}
+	if len(l.Area.Flags) != len(l.Regions) {
+		return fmt.Errorf("layout: area.flags has %d entries for %d regions", len(l.Area.Flags), len(l.Regions))
+	}
 	if len(l.Figures.Chunks) == 0 {
 		return fmt.Errorf("layout: figures.chunks is empty")
 	}
@@ -381,8 +414,8 @@ func (l *Layout) Check() error {
 			return fmt.Errorf("layout: dungeons.names[%d] is empty", i)
 		}
 	}
-	if f := l.Dungeons.Flags; f.First > f.Last || f.Last > lastFlag {
-		return fmt.Errorf("layout: dungeons.flags runs 0x%X to 0x%X; it must lie in 1 to 0x%X, first before last", int(f.First), int(f.Last), lastFlag)
+	if f := l.Dungeons.Flags; f.First > f.Last || f.Last > LastFlag {
+		return fmt.Errorf("layout: dungeons.flags runs 0x%X to 0x%X; it must lie in 1 to 0x%X, first before last", int(f.First), int(f.Last), LastFlag)
 	}
 	if len(l.Dungeons.Styles) == 0 {
 		return fmt.Errorf("layout: dungeons.styles is empty")

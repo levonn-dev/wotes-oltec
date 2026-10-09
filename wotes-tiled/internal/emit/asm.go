@@ -11,7 +11,7 @@ import (
 )
 
 // Assembler renders the tables as GNU as source for the m68k target. ROM data enters only as .incbin
-// offsets and chunk addresses; the only pixel data written is the map's new tiles.
+// offsets and chunk addresses; the only pixel data written is the map's new tiles and its area map's.
 func Assembler(res *convert.Result, source string) string {
 	var sb strings.Builder
 	n := res.Name
@@ -42,6 +42,7 @@ func Assembler(res *convert.Result, source string) string {
 	if res.Levels != nil {
 		globals = append(globals, n+"_levels", n+"_level_directory", n+"_stairs")
 	}
+	globals = append(globals, n+"_area_tiles", n+"_area_plane", n+"_area_scale_x", n+"_area_scale_y", n+"_area_flag")
 	fmt.Fprintf(&sb, "    .globl  %s\n", strings.Join(globals, ", "))
 	fmt.Fprintf(&sb, "\n%s_front:\n", n)
 	words(&sb, res.Front[:])
@@ -85,6 +86,7 @@ func Assembler(res *convert.Result, source string) string {
 		fmt.Fprintf(&sb, "%s_place_%s:\n    .short  %d, %d, %d, %d\n", n, p.Name, p.X0, p.Y0, p.X1, p.Y1)
 	}
 	objects(&sb, res)
+	area(&sb, res)
 	sb.WriteString("\n    .section .note.GNU-stack,\"\",%progbits\n")
 	return sb.String()
 }

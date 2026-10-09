@@ -27,6 +27,7 @@ type Options struct {
 	MapPath      string
 	TileBudget   int // DefaultBudget when 0
 	TilesetsOnly bool
+	NoArea       bool // skip the picture wotes.area names: render --area is what makes it
 }
 
 // TileRef names a tile by its origin, before VRAM indices are assigned. The zero TileRef is the blank tile.
@@ -93,6 +94,10 @@ type Result struct {
 	FigureColours []uint16 // the palette line of the figures, nil without wotes.figure_colours
 	Spawns        []Spawn
 	SpawnGrid     SpawnGrid
+	Area          *Area // nil without wotes.area
+	AreaWidth     int   // the land pixels the picture covers; rom.MapPixels when the map does not say
+	AreaHeight    int
+	AreaShared    int // the ROM address of the game's shared picture chunk, set with Area
 	Counts        Counts
 	Deps          []string
 	Budget        int
@@ -187,6 +192,9 @@ func Convert(opt Options) (*Result, error) {
 	}
 	if err := c.objects(m, infos, layers, res); err != nil {
 		return nil, err
+	}
+	if err := c.area(m, res); err != nil {
+		return nil, fmt.Errorf("%s: %v", opt.MapPath, err)
 	}
 	if err := c.levels(res); err != nil {
 		return nil, err

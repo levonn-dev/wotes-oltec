@@ -8,6 +8,7 @@ tiles: 7 of 943 (4 base, 2 borrowed, 1 new); VRAM 224 bytes
 place cave: (100, 200) to (100, 200)
 place shrine: (240, 480) to (287, 503)
 region: 3
+area map: none (VIEW MAP refuses)
 entrance 3 cave: (776, 1032), from game level 0, to level 2, entry point 1
 levels: 38 of 256; stairs: 2 of 128; entrances: 4 of 128
 trigger armour: shop 1, level 3, (256, 272) to (303, 303)

@@ -38,6 +38,7 @@ func Report(res *convert.Result, source string) string {
 	if res.HasRegion {
 		fmt.Fprintf(&sb, "region: %d\n", res.Region)
 	}
+	sb.WriteString(areaReport(res))
 	for _, e := range res.Entrances {
 		where := fmt.Sprintf("level %d, entry point %d", e.Map, e.Entry)
 		if e.Dungeon != "" {

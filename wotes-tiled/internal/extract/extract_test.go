@@ -2,6 +2,7 @@ package extract
 
 import (
 	"bytes"
+	"image/color"
 	"image/png"
 	"os"
 	"path/filepath"
@@ -21,6 +22,7 @@ func TestRunWritesEveryFile(t *testing.T) {
 		"valley-tiles-p0.tsj", "valley-tiles-p0.png", "valley-tiles-p3.tsj", "valley-tiles-p3.png",
 		"valley-metatiles.tmj", "valley-metatiles.tsj", "valley-metatiles.png", "valley.tmj",
 		"jungle.tmj", "swamp-metatiles.tmj", "swamp.tmj", "city-figures.tsj", "city-figures.png", "city.tmj",
+		filepath.Join(AreaDir, "valley.png"), filepath.Join(AreaDir, "city.png"), filepath.Join(AreaDir, "swamp.png"),
 		filepath.Join(DungeonsDir, "dungeon-sides.tsj"), filepath.Join(DungeonsDir, "dungeon-sides.png"), "dungeon-walls-test.png", "dungeon-walls-other.png", filepath.Join(DungeonsDir, "00-kacanitzu-s-abode.tmj"), filepath.Join(DungeonsDir, "25-the-halls-of-the-dead.tmj")} {
 		if _, err := os.Stat(filepath.Join(dir, "rom", name)); err != nil {
 			t.Errorf("%s not written: %v", name, err)
@@ -245,5 +247,52 @@ func TestSolidTilesetCrossesEachBlockedTile(t *testing.T) {
 	}
 	if !red(0, 0) || !red(7, 0) || !red(4, 4) || !red(16, 0) || !red(23, 0) || red(1, 0) || red(8, 0) || red(12, 4) || red(0, 8) || red(4, 12) {
 		t.Fatal("tile 5 must cross tiles 0 and 2 only")
+	}
+}
+
+func TestAreaPicturesAndCoverage(t *testing.T) {
+	dir := t.TempDir()
+	g := romtest.Game()
+	if err := Run(g, dir); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Open(filepath.Join(dir, "rom", AreaDir, "valley.png"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	img, err := png.Decode(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b := img.Bounds(); b.Dx() != rom.AreaPixels || b.Dy() != rom.AreaPixels {
+		t.Fatalf("picture is %d by %d", b.Dx(), b.Dy())
+	}
+	line := g.Palette().Line(rom.AreaLine)
+	rgba := func(x, y int) color.NRGBA { return color.NRGBAModel.Convert(img.At(x, y)).(color.NRGBA) }
+	if rgba(0, 0).A != 0 || rgba(16, 0) != line[8] || rgba(7, 7) != line[15] || rgba(8, 0) != line[15] {
+		t.Fatalf("pixels (0,0)=%v (16,0)=%v (7,7)=%v (8,0)=%v", rgba(0, 0), rgba(16, 0), rgba(7, 7), rgba(8, 0))
+	}
+	for _, c := range []struct {
+		region, file        string
+		width, height, flag int
+	}{{"valley", "area/valley.png", 26 * 236, 26 * 248, 0}, {"city", "area/city.png", 26 * 236, 26 * 248, 0}, {"jungle", "area/jungle.png", 26 * 126, 26 * 144, 0x43}, {"swamp", "area/swamp.png", 26 * 103, 26 * 116, 0x1E}} {
+		m, err := tiled.ReadMap(filepath.Join(dir, "rom", c.region+".tmj"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		w, _ := tiled.IntProp(m.Properties, PropAreaWidth)
+		h, _ := tiled.IntProp(m.Properties, PropAreaHeight)
+		if tiled.StringProp(m.Properties, PropArea) != c.file || w != c.width || h != c.height {
+			t.Errorf("%s: area %q %d by %d", c.region, tiled.StringProp(m.Properties, PropArea), w, h)
+		}
+		if f, has := tiled.IntProp(m.Properties, PropAreaFlag); has != (c.flag != 0) || f != c.flag {
+			t.Errorf("%s: %s %#x (set %v), want %#x", c.region, PropAreaFlag, f, has, c.flag)
+		}
+		for _, p := range m.Properties {
+			if p.Name == PropArea && p.Type != "file" {
+				t.Errorf("%s: wotes.area has type %q", c.region, p.Type)
+			}
+		}
 	}
 }

@@ -84,5 +84,6 @@ func New() rom.ROM {
 	put16(r, int(Region.Ground), 1)
 	objects(r)
 	dungeons(r, &rom.Clean)
+	area(r)
 	return r
 }

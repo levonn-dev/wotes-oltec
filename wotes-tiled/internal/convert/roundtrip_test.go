@@ -41,6 +41,7 @@ func TestRoundTrip(t *testing.T) {
 			if len(res.Blocks) > reg.BlockCount {
 				t.Fatalf("%d blocks, the ROM has %d", len(res.Blocks), reg.BlockCount)
 			}
+			sameAreaMap(t, g, reg.Name, res.Area)
 			romFront, romGround := g.Cells(int(reg.Front)), g.Cells(int(reg.Ground))
 			romBlocks, romMetas := g.Blocks(reg), g.Metatiles(reg)
 			metas := res.Metatiles(g.ROM)
@@ -154,4 +155,40 @@ func spawnAreasOnly(t *testing.T, path string) {
 	}
 	m.Layers = kept
 	must(t, tiled.WriteMap(path, m))
+}
+
+// sameAreaMap checks that a converted area map draws the region's picture pixel for pixel and scales the
+// marker by the game's own divisors.
+func sameAreaMap(t *testing.T, g *rom.Game, region string, a *convert.Area) {
+	t.Helper()
+	idx, err := g.Layout.RegionIndex(region)
+	must(t, err)
+	want, err := g.AreaPicture(idx)
+	must(t, err)
+	if a == nil || a.ScaleX != want.DivisorX || a.ScaleY != want.DivisorY {
+		if a == nil {
+			t.Fatal("no area map")
+		}
+		t.Fatalf("divisors %d and %d, the game's %d and %d", a.ScaleX, a.ScaleY, want.DivisorX, want.DivisorY)
+	}
+	if a.Flag != want.Flag {
+		t.Fatalf("flag %#x, the game's %#x", a.Flag, want.Flag)
+	}
+	for c, w := range a.Cells {
+		tile := a.Tiles[w.Tile()-rom.AreaFirst]
+		for p := 0; p < 64; p++ {
+			x, y := p%8, p/8
+			sx, sy := x, y
+			if w.HFlip() {
+				sx = 7 - x
+			}
+			if w.VFlip() {
+				sy = 7 - y
+			}
+			px, py := c%rom.AreaSize*8+x, c/rom.AreaSize*8+y
+			if got := tile[sy*8+sx]; got != want.Pixels[py*rom.AreaPixels+px] {
+				t.Fatalf("pixel (%d, %d): colour %d, the game's %d", px, py, got, want.Pixels[py*rom.AreaPixels+px])
+			}
+		}
+	}
 }
