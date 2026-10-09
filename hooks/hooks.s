@@ -95,9 +95,10 @@ region_tiles_hook:
     jmp     game_load_region_tiles_valley
 2:  rts
 
-| World map. game_world_map names the swamp and the jungle and draws every other region
-| from four-entry tables; region 4 takes the refusal instead. rts keeps the condition
-| codes for the bne.b that follows the hook. Touches nothing.
+| Area map. game_world_map gates the jungle and the swamp on an event flag and draws every region
+| from four-entry tables that end before region 4; the land's picture, its divisors and its flag come
+| from the map as oltec_area_*. The gate: a flag byte of 255 refuses as the game did, 0 draws, any other
+| value is an event flag to test. rts keeps the condition codes for the bne.b after the hook. Touches d0.
     .section .hook_0097C6,"ax"
     jsr     region_world_map_hook
     .section .orig_0097C6,""
@@ -106,11 +107,58 @@ region_tiles_hook:
     .text
 region_world_map_hook:
     cmpi.b  #4,ram_region
-    bne.s   1f
+    bne.s   3f
     addq.l  #4,%sp
-    jmp     game_world_map_refuse
-1:  cmpi.b  #3,ram_region
+    moveq   #0,%d0
+    move.b  oltec_area_flag,%d0
+    cmpi.b  #0xff,%d0
+    beq.s   1f
+    tst.b   %d0
+    beq.s   2f
+    jsr     game_test_event_flag
+    beq.s   1f
+2:  jmp     game_world_map_draw
+1:  jmp     game_world_map_refuse
+3:  cmpi.b  #3,ram_region
     rts
+
+| The drawing routine's scale branch, eight bytes: cmpi.b #2,d2; blt.b; bgt.b. Region 4 divides the
+| party's position by the map's divisors, loads the land's chunk list and plane where the game loads
+| the others, fades in and joins the wait loop with the marker's position in d3 and d4; the other
+| regions get the test and its branches back. Touches d0, a0 and a1, as the game's own path does.
+    .section .hook_009862,"ax"
+    jsr     area_map_hook
+    nop
+    .section .orig_009862,""
+    .byte   0x0c,0x02,0x00,0x02,0x6d,0x16,0x6e,0x0a
+
+    .text
+area_map_hook:
+    cmpi.b  #4,%d2
+    beq.s   1f
+    cmpi.b  #2,%d2
+    blt.s   4f
+    bgt.s   5f
+    rts                                  | the jungle's divisors follow the hook
+4:  addq.l  #4,%sp
+    jmp     game_world_map_scale_valley
+5:  addq.l  #4,%sp
+    jmp     game_world_map_scale_swamp
+1:  addq.l  #4,%sp
+    divu.w  oltec_area_scale_x,%d3
+    divu.w  oltec_area_scale_y,%d4
+    addq.w  #8,%d3
+    addq.w  #8,%d4
+    lea     oltec_area_tiles,%a0
+    movea.l #0x4a20,%a1
+    jsr     game_load_tiles
+    move.w  #0x1000,%d0
+    lea     oltec_area_plane,%a0
+    movea.l #0xe000,%a1
+    jsr     game_load_plane
+    lea     rom_main_palette,%a0
+    jsr     game_fade_in_jump            | through the jump every fade-in takes, as the game draws its pictures
+    jmp     game_world_map_wait
 
 | Save-slot names. The slot list indexes rom_region_names with the region times four;
 | the five-entry copy takes its place. Touches a0 and d0, as the replaced pair did.

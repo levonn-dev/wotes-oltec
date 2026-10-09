@@ -1912,6 +1912,34 @@
                  "width":32,
                  "x":1704,
                  "y":544
+                },
+                {
+                 "height":16,
+                 "id":62,
+                 "name":"map",
+                 "opacity":1,
+                 "properties":[
+                        {
+                         "name":"wotes.flag",
+                         "type":"int",
+                         "value":83
+                        },
+                        {
+                         "name":"wotes.kind",
+                         "type":"string",
+                         "value":"event"
+                        },
+                        {
+                         "name":"wotes.text",
+                         "type":"string",
+                         "value":"YOU FIND A MAP OF THE\nOLTEC HILLS."
+                        }],
+                 "rotation":0,
+                 "type":"Trigger",
+                 "visible":true,
+                 "width":32,
+                 "x":1424,
+                 "y":592
                 }],
          "opacity":1,
          "type":"objectgroup",
@@ -2111,9 +2139,29 @@
          "y":0
         }],
  "nextlayerid":9,
- "nextobjectid":62,
+ "nextobjectid":63,
  "orientation":"orthogonal",
  "properties":[
+        {
+         "name":"wotes.area",
+         "type":"file",
+         "value":"area\/oltec.png"
+        },
+        {
+         "name":"wotes.area_flag",
+         "type":"int",
+         "value":83
+        },
+        {
+         "name":"wotes.area_height",
+         "type":"int",
+         "value":2880
+        },
+        {
+         "name":"wotes.area_width",
+         "type":"int",
+         "value":2880
+        },
         {
          "name":"wotes.base",
          "type":"string",
