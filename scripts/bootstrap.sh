@@ -1,19 +1,24 @@
 #!/bin/sh
-# Installs the pinned BlastEm nightly and mdrom release into tools/, builds wotes-tiled when
-# Go is present, then checks the apt tools and the clean ROM. Usage: scripts/bootstrap.sh
-# (or: task bootstrap). Never sudo.
+# Installs the pinned BlastEm nightly and mdrom release into tools/, fetches planetchili's two patches,
+# builds wotes-tiled when Go is present, then checks the apt tools and the clean ROM.
+# Usage: scripts/bootstrap.sh (or: task bootstrap). Never sudo.
 set -eu
 
 BLASTEM_VERSION=0.6.3-pre-8013468ed981
 BLASTEM_SHA256=26539e1efe89aea1d79663372856e40fe874fa141517276bedc47c0c476604c8
 MDROM_REPO=levonn-dev/mdrom
 MDROM_VERSION=v0.1.0
+# planetchili's patches, one a release: tag, asset, the asset's SHA-256.
+CHILI_REPO=planetchili/wotes_patch
+CHILI_PATCHES='V1.0:wotes_chili_patch_1_0.zip:a008cb008d93299667956aa3a45c1662b1a0de717619248f3d31036e457033f9
+V2.0:wotes_chili_patch_2_0.zip:edcbfb8bc9e17bd82353f0f16bf51bf8a12f20c1e2f5047e19b4d3138b16d54c'
 
 ROM_NAME='Dungeons & Dragons - Warriors of the Eternal Sun (USA, Europe).md'
 ROM_SHA1=9135f7fda03ef7da92dfade9c0df75808214f693
 
 cd "$(dirname "$0")/.."
 command -v curl >/dev/null 2>&1 || { echo "bootstrap: curl is required (sudo apt install curl)" >&2; exit 1; }
+command -v unzip >/dev/null 2>&1 || { echo "bootstrap: unzip is required (sudo apt install unzip)" >&2; exit 1; }
 mkdir -p tools
 
 fetch() { # URL DEST
@@ -77,6 +82,30 @@ install_mdrom() {
   echo "bootstrap: mdrom installed in tools/mdrom"
 }
 
+install_chili() {
+  present=yes
+  for entry in $CHILI_PATCHES; do [ -f "tools/chili/${entry%%:*}.bps" ] || present=; done
+  if [ -n "$present" ] && [ -f tools/chili/VERSION ] && [ "$(cat tools/chili/VERSION)" = "$CHILI_PATCHES" ]; then
+    echo "bootstrap: planetchili's patches present"
+    return
+  fi
+  rm -rf tools/chili.part tools/chili
+  mkdir -p tools/chili.part
+  for entry in $CHILI_PATCHES; do
+    tag=${entry%%:*}; rest=${entry#*:}; asset=${rest%%:*}; sum=${rest#*:}
+    echo "bootstrap: downloading planetchili's patch $tag"
+    fetch "https://github.com/$CHILI_REPO/releases/download/$tag/$asset" "tools/chili.part/$asset"
+    echo "$sum  tools/chili.part/$asset" | sha256sum -c --quiet \
+      || { rm -rf tools/chili.part; echo "bootstrap: planetchili's $tag download failed its checksum" >&2; exit 1; }
+    # Each zip holds one BPS file, named .md.bst.
+    unzip -p "tools/chili.part/$asset" '*.bst' > "tools/chili.part/$tag.bps"
+    rm "tools/chili.part/$asset"
+  done
+  printf '%s\n' "$CHILI_PATCHES" > tools/chili.part/VERSION
+  mv tools/chili.part tools/chili
+  echo "bootstrap: planetchili's patches installed in tools/chili"
+}
+
 build_wotes_tiled() {
   if command -v go >/dev/null 2>&1 && go version | grep -Eq 'go(1\.(2[6-9]|[3-9][0-9])|[2-9])'; then
     mkdir -p tools/wotes-tiled
@@ -113,6 +142,7 @@ check_rom() {
 
 install_blastem
 install_mdrom
+install_chili
 build_wotes_tiled
 check_tools
 check_rom
