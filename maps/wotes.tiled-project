@@ -2,7 +2,7 @@
     "automappingRulesFile": "",
     "commands": [
         {
-            "arguments": "convert %mapfile --rom build/m68k/clean.md --tilesets-only",
+            "arguments": "convert %mapfile --rom build/m68k/base.md --tilesets-only",
             "command": "tools/wotes-tiled/wotes-tiled",
             "enabled": true,
             "name": "Regenerate metatiles",

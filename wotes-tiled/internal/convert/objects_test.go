@@ -426,7 +426,7 @@ func TestConvertUnderAnotherName(t *testing.T) {
 	if a0 != b0 || a1 != b1 || a1 == "" {
 		t.Fatalf("the two maps differ beyond their names and their entrance tables:\n%s\n----\n%s", a0+a1, b0+b1)
 	}
-	if !strings.Contains(at, "    .byte   3 | entrance 3, cave\n") || !strings.Contains(bt, "    .byte   1 | entrance 0, cave\n    .incbin \"clean.md\", 0x10417, 3\n") {
+	if !strings.Contains(at, "    .byte   3 | entrance 3, cave\n") || !strings.Contains(bt, "    .byte   1 | entrance 0, cave\n    .incbin \"base.md\", 0x10417, 3\n") {
 		t.Fatalf("the entrance tables:\n%s\n----\n%s", at, bt)
 	}
 }

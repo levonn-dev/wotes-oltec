@@ -31,9 +31,9 @@ function(wotes_tiled_map name)
   add_custom_command(
     OUTPUT "${_out}"
     COMMAND "${WOTES_TILED}" convert "maps/${name}.tmj"
-            --rom "${CMAKE_BINARY_DIR}/clean.md" --out "${_out}" --depfile "${_dep}" ${_budget}
+            --rom "${CMAKE_BINARY_DIR}/base.md" --out "${_out}" --depfile "${_dep}" ${_budget}
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-    DEPENDS "${WOTES_TILED}" "${CMAKE_SOURCE_DIR}/maps/${name}.tmj" "${CMAKE_BINARY_DIR}/clean.md"
+    DEPENDS "${WOTES_TILED}" "${CMAKE_SOURCE_DIR}/maps/${name}.tmj" "${CMAKE_BINARY_DIR}/base.md"
     DEPFILE "${_dep}"
     COMMENT "Converting maps/${name}.tmj"
     VERBATIM)

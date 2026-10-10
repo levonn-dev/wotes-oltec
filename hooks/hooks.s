@@ -1,33 +1,5 @@
 | Each .hook_XXXXXX section is placed at ROM offset XXXXXX by the HOOKS list in
-| CMakeLists.txt; its .orig_ twin declares the clean-ROM bytes mdrom checks before writing.
-
-| Startup hook at 0x300: the stack pointer is not valid yet, so jmp rather than jsr.
-| poc_entry runs the lea the game executes at 0x306, calls C, then resumes at 0x306.
-| No registers are saved: the code from 0x306 on reinitialises every register.
-    .section .hook_000300,"ax"
-    jmp     poc_entry
-    .section .orig_000300,""
-    .byte   0x4e,0x71,0x4e,0x71,0x4e,0x71
-
-    .text
-    .globl  poc_entry
-poc_entry:
-    lea     0xfffffff6,%sp
-    jsr     poc_init
-poc_ret:
-    jmp     0x306
-
-| Class list on the character-creation screen: FIGHTER becomes WARRIOR in both
-| copies, the plain list at 0x22DA and the menu list with control codes at 0x230D.
-    .section .hook_0022E1,"a"
-    .ascii  "WARRIOR"
-    .section .orig_0022E1,""
-    .ascii  "FIGHTER"
-
-    .section .hook_002316,"a"
-    .ascii  "WARRIOR"
-    .section .orig_002316,""
-    .ascii  "FIGHTER"
+| CMakeLists.txt; its .orig_ twin declares the bytes mdrom expects in the base ROM before writing.
 
 | Region tables. game_load_region reads six four-entry columns at 0x8D2-0x910 with
 | (d8,PC,Xn) addressing, which cannot reach the expansion, so the whole run is redone
@@ -452,10 +424,10 @@ stairs_hook:
 | transition on tile 8,0 with exit code -15, entrance 14; the records behind them move up.
     .section .hook_0D70A8,"a"
     .byte   0x06, 0xf1, 8, 0, 0, 0, 0, 0, 0, 0
-    .incbin "clean.md", 0xd70bc, 340
+    .incbin "base.md", 0xd70bc, 340
     .byte   0                           | the ten clean bytes behind the terminator are dead
     .section .orig_0D70A8,""
-    .incbin "clean.md", 0xd70a8, 351
+    .incbin "base.md", 0xd70a8, 351
 
 | Special places. game_special_places walks rom_special_places, whose castle records would fire
 | on the land's coordinates; region 4 walks oltec_triggers instead, with the same rectangle,

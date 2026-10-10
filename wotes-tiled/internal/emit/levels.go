@@ -7,10 +7,10 @@ import (
 	"github.com/levonn-dev/wotes-oltec/wotes-tiled/internal/convert"
 )
 
-// incbin writes count bytes of the clean ROM from off, nothing for none.
+// incbin writes count bytes of the build's base ROM from off, nothing for none.
 func incbin(sb *strings.Builder, off, count int) {
 	if count > 0 {
-		fmt.Fprintf(sb, "    .incbin \"clean.md\", 0x%X, %d\n", off, count)
+		fmt.Fprintf(sb, "    .incbin \"base.md\", 0x%X, %d\n", off, count)
 	}
 }
 

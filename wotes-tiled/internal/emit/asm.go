@@ -53,7 +53,7 @@ func Assembler(res *convert.Result, source string) string {
 		words(&sb, b[:])
 	}
 	fmt.Fprintf(&sb, "\n%s_metatiles:\n", n)
-	fmt.Fprintf(&sb, "    .incbin \"clean.md\", 0x%X, %d\n", res.Base.Metatiles, res.Base.MetaCount*18)
+	fmt.Fprintf(&sb, "    .incbin \"base.md\", 0x%X, %d\n", res.Base.Metatiles, res.Base.MetaCount*18)
 	for _, m := range res.Generated {
 		ws := make([]uint16, len(m))
 		for i, w := range m {

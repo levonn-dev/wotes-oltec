@@ -1,7 +1,11 @@
 # go-task taskfile (https://taskfile.dev). `task` with no args lists every task; Task wraps CMake.
-# The m68k preset does the configuring, bootstrap fetches tools/, check:host is the CI gate.
+# The presets do the configuring, one build tree per base ROM; bootstrap fetches tools/, check:host is the CI gate.
 
 version: "3"
+
+vars:
+  # One build tree per base ROM, each under build/ by its preset's name.
+  PRESETS: m68k m68k-chili-v1 m68k-chili-v2
 
 tasks:
 
@@ -14,51 +18,59 @@ tasks:
   # ------------------------------ bootstrap ------------------------------
 
   bootstrap:
-    desc: Install BlastEm and mdrom into tools/, build wotes-tiled there; check the apt tools and the clean ROM
+    desc: Install BlastEm, mdrom and planetchili's two patches into tools/, build wotes-tiled there; check the apt tools and the clean ROM
     cmds:
       - scripts/bootstrap.sh
 
   # -------------------------------- build --------------------------------
 
   configure:
-    desc: 'Configure build/m68k with the m68k preset (extra CMake options after --, e.g. task configure -- -DCLEAN_ROM=path)'
+    desc: 'Configure the three build trees, build/m68k, build/m68k-chili-v1 and build/m68k-chili-v2 (extra CMake options after -- go to each, e.g. task configure -- -DCLEAN_ROM=path)'
     status:
-      - '{{if .CLI_ARGS}}false{{else}}test -f build/m68k/build.ninja{{end}}'
+      - '{{if .CLI_ARGS}}false{{else}}{{range $p := splitList " " .PRESETS}}test -f build/{{$p}}/build.ninja && {{end}}true{{end}}'
     cmds:
-      - cmake --preset m68k {{.CLI_ARGS}}
+      - for: { var: PRESETS }
+        cmd: cmake --preset {{.ITEM}} {{.CLI_ARGS}}
 
   build:
-    desc: 'Build everything: link, 68000 scan, hook check, inject, patch.bps, host helper test'
+    desc: 'Build the patch for each base: link, 68000 scan, hook check, inject, then oltec.bps, oltec-chili-v1.bps and oltec-chili-v2.bps'
     cmds:
       - task: configure
-      - cmake --build --preset m68k
+      - for: { var: PRESETS }
+        cmd: cmake --build --preset {{.ITEM}}
 
   run:
-    desc: Run the patched ROM in BlastEm (no debugger)
+    desc: 'Run the patched ROM in BlastEm (no debugger); BASE=chili-v1 or BASE=chili-v2 runs that build'
+    vars:
+      BASE: '{{.BASE | default "clean"}}'
+      PRESET: '{{if eq .BASE "clean"}}m68k{{else}}m68k-{{.BASE}}{{end}}'
+    preconditions:
+      - sh: 'case " {{.PRESETS}} " in *" {{.PRESET}} "*) ;; *) exit 1 ;; esac'
+        msg: 'BASE={{.BASE}} has no build tree; use clean, chili-v1 or chili-v2'
     cmds:
       - task: build
-      - cmake --build --preset m68k --target run
+      - cmake --build --preset {{.PRESET}} --target run
 
   # -------------------------------- check --------------------------------
 
   check:
-    desc: 'Full check: build, the wotes-tiled round trip against the clean ROM, then the on-target GDB check of poc_init'
+    desc: 'Full check: build, the wotes-tiled round trip against the clean ROM, then the on-target GDB check on each of the three ROMs'
     cmds:
       - task: build
       - task: tiled:roundtrip
       - task: check:target
 
   check:host:
-    desc: 'Host-only checks, no cross compiler or ROM needed: helper test, wotes-tiled tests, shellcheck. The CI gate.'
+    desc: 'Host-only checks, no cross compiler or ROM needed: wotes-tiled tests, shellcheck. The CI gate.'
     cmds:
-      - scripts/check-rt.sh build/host
       - task: tiled:test
       - shellcheck scripts/*.sh
 
   check:target:
-    desc: Boot the patched ROM under GDB and check the value poc_init returns
+    desc: Boot each of the three patched ROMs under GDB and check the palette fade_in_hook sees on the intro's first fade
     cmds:
-      - cmake --build --preset m68k --target check-target
+      - for: { var: PRESETS }
+        cmd: cmake --build --preset {{.ITEM}} --target check-target
 
   # -------------------------------- tiled --------------------------------
 
@@ -80,7 +92,7 @@ tasks:
     desc: Round-trip every ROM region, read every dungeon level and VIEW MAP picture and check two extracts match (needs the configured build tree)
     dir: wotes-tiled
     env:
-      WOTES_CLEAN_ROM: '{{.ROOT_DIR}}/build/m68k/clean.md'
+      WOTES_CLEAN_ROM: '{{.ROOT_DIR}}/build/m68k/base.md'
     cmds:
       - task: configure
       - go test -run 'TestRoundTrip|TestDungeonsReal|TestRunIsDeterministicReal|TestSpeechRoundTripReal|TestCityFiguresReal|TestAreaPictureReal' ./internal/convert/ ./internal/rom/ ./internal/extract/ ./internal/dungeon/
@@ -90,7 +102,7 @@ tasks:
     cmds:
       - task: configure
       - task: tiled:build
-      - tools/wotes-tiled/wotes-tiled extract --rom build/m68k/clean.md --out maps
+      - tools/wotes-tiled/wotes-tiled extract --rom build/m68k/base.md --out maps
 
   tiled:render:
     desc: 'Render a map or a ROM region to PNG, e.g. task tiled:render -- --region valley --out build/valley.png'
@@ -99,7 +111,7 @@ tasks:
       - task: configure
         vars: {CLI_ARGS: ''}
       - task: tiled:build
-      - tools/wotes-tiled/wotes-tiled render {{.CLI_ARGS}} --rom build/m68k/clean.md
+      - tools/wotes-tiled/wotes-tiled render {{.CLI_ARGS}} --rom build/m68k/base.md
 
   tiled:install:
     desc: Fetch the pinned Tiled AppImage into tools/tiled (optional; the build never needs it)
@@ -117,11 +129,19 @@ tasks:
   # -------------------------------- debug --------------------------------
 
   debug:
-    desc: Interactive gdb-multiarch session against BlastEm, paused at the reset vector
+    desc: 'Interactive gdb-multiarch session against BlastEm, paused at the reset vector; BASE as for run'
     interactive: true
+    vars:
+      BASE: '{{.BASE | default "clean"}}'
+      PRESET: '{{if eq .BASE "clean"}}m68k{{else}}m68k-{{.BASE}}{{end}}'
+      # The image names IMAGE_NAME gives each base in CMakeLists.txt.
+      IMAGE: '{{if eq .BASE "clean"}}patched{{else}}patched-{{.BASE}}{{end}}'
+    preconditions:
+      - sh: 'case " {{.PRESETS}} " in *" {{.PRESET}} "*) ;; *) exit 1 ;; esac'
+        msg: 'BASE={{.BASE}} has no build tree; use clean, chili-v1 or chili-v2'
     cmds:
       - task: build
-      - scripts/gdb.sh build/m68k/patch.elf -ex 'set architecture m68k' -ex 'target remote | scripts/blastem.sh build/m68k/patched.md -D'
+      - scripts/gdb.sh build/{{.PRESET}}/patch.elf -ex 'set architecture m68k' -ex 'target remote | scripts/blastem.sh build/{{.PRESET}}/{{.IMAGE}}.md -D'
 
   # -------------------------------- clean --------------------------------
 

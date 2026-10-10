@@ -143,7 +143,7 @@ func TestALandsEntrancesOpenItsDungeonMapsCaves(t *testing.T) {
 		"    .byte   3 | entrance 4, north\n    .byte   3 | entrance 5, south\n    .byte   0xFF\n",
 		"    .short  0x0208, 0x0300 | entrance 5, south\n    .byte   2, 39, 82, 0\n",
 		"    .long   0x011624, 0x0C3F32, test_grid_caves | level 39: caves, the cave of b\n",
-		"test_stairs:\n    .incbin \"clean.md\", 0x10D0A, 8\n    .short  39\n    .byte   0, 0\n    .short  38\n    .byte   0, 0\n",
+		"test_stairs:\n    .incbin \"base.md\", 0x10D0A, 8\n    .short  39\n    .byte   0, 0\n    .short  38\n    .byte   0, 0\n",
 		"test_level_39_text_1:\n    .asciz  \"MIND\\rTHE STEP.\"\n",
 	} {
 		if !strings.Contains(asm, want) {

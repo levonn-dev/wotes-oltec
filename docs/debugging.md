@@ -26,29 +26,32 @@ connection. `gl off` is required; bootstrap sets it in `default.cfg`, and a pers
 
 ## Command line
 
-`task debug` builds, then opens this session:
+`task debug` builds, then opens this session on the clean ROM's build; `task debug BASE=chili-v1` or `BASE=chili-v2`
+opens it on that build, with that tree's `patch.elf` and its image, `build/m68k-chili-v1/patched-chili-v1.md` or
+`build/m68k-chili-v2/patched-chili-v2.md`:
 
 ```
 gdb-multiarch build/m68k/patch.elf -ex 'set architecture m68k' \
     -ex 'target remote | scripts/blastem.sh build/m68k/patched.md -D'
 ```
 
-The CPU starts paused at the reset vector (`0x200`), so breakpoints set now catch startup code:
+The CPU starts paused at the reset vector (`0x200`), so breakpoints set now catch the boot. The intro's first picture
+fades in through the patch's `fade_in_hook` before any button is pressed:
 
 ```
-(gdb) break poc_init
+(gdb) break fade_in_hook
 (gdb) continue
-(gdb) next
-(gdb) finish        # or: break poc_ret, continue, p/d $d0
+(gdb) p/x $a0       # 0x64dba, the palette the intro fades to
+(gdb) stepi
 ```
 
-`build/m68k/patch.elf` carries DWARF for `src/` and `hooks/`, so `list`, `step`, and `info locals` work in C. Game code
-outside the patch shows as raw addresses; `x/10i $pc` disassembles it.
+`build/m68k/patch.elf` carries DWARF for `src/` and `hooks/`, so `list`, `step` and `stepi` follow the patch's
+assembly. Game code outside the patch shows as raw addresses; `x/10i $pc` disassembles it.
 
 ## Scripted check
 
-`task check:target` runs `scripts/check-target.sh`, which breaks on `poc_init` and on `poc_ret` and asserts `d0` is
-`356872`. `task check` builds first.
+`task check:target` runs `scripts/check-target.sh` on each of the three builds, which breaks on `fade_in_hook` and
+asserts `a0` is `0x64dba`, the palette of the intro's first picture. `task check` builds first.
 
 ## IDEA Ultimate
 
@@ -83,15 +86,17 @@ and `m68k-linux-gnu-gcc` on your PATH. No extra plugin is needed.
 2. Settings, Build Execution Deployment, CMake: enable the `m68k` profile IDEA created from `CMakePresets.json` and
    disable any other. It builds into `build/m68k/`, the same directory as the command line. After the first configure
    every reload warns that `CMAKE_TOOLCHAIN_FILE` was not used; CMake reads it once and caches it, so ignore the
-   warning.
+   warning. To debug a build for planetchili's patch, enable `m68k-chili-v1` or `m68k-chili-v2` beside `m68k`, copy the
+   `BlastEm` configuration (Run, Edit Configurations, Copy Configuration, with Store as project file unchecked) and
+   point the copy's two paths at that tree's `patch.elf` and its image, `patched-chili-v1.md` or `patched-chili-v2.md`.
 3. Settings, Build Execution Deployment, Debugger, Debug Profiles: the committed `gdb-multiarch` profile in
    `.idea/debug-profiles.xml` runs `scripts/gdb.sh`, a wrapper for `gdb-multiarch`; select it in the main toolbar's
    debug profile selector. The toolchain's own Debugger field is deprecated and ignored by Remote Debug.
 4. Build, Build Project. This is the `all` target. IDEA also generates one CMake Application configuration per target,
    and the ones for `run`, `rom`, and `check-target` are committed; Run is meaningless for them, but Build on `run` or
    `check-target` executes those targets.
-5. Set a breakpoint in `src/poc.c` and debug the committed `BlastEm` configuration
-   (`.idea/runConfigurations/BlastEm.xml`, a C/C++ Remote Debug with `'target remote' args`
+5. Add a symbolic breakpoint on `fade_in_hook` (Run, View Breakpoints, the + button) and debug the committed
+   `BlastEm` configuration (`.idea/runConfigurations/BlastEm.xml`, a C/C++ Remote Debug with `'target remote' args`
    `| scripts/blastem.sh build/m68k/patched.md -D` and symbol file `$PROJECT_DIR$/build/m68k/patch.elf`). BlastEm opens
    and the session starts paused at the reset vector; press Resume to reach the breakpoint. The Memory View is empty
    until you enter an address in its Go to address field (`0xFF0000` for work RAM, `$sp`, `&name`); Ctrl+Enter on a
@@ -101,5 +106,5 @@ and `m68k-linux-gnu-gcc` on your PATH. No extra plugin is needed.
 
 ## Emulator only
 
-`task run` launches BlastEm on the patched ROM without a debugger. Start a new game: the class list on the first
-character screen reads `WARRIOR` where the original reads `FIGHTER`.
+`task run` launches BlastEm on the patched ROM without a debugger; `task run BASE=chili-v1` or `BASE=chili-v2` launches
+that build, whose image has a name of its own, so BlastEm keeps its saves apart from the clean build's.

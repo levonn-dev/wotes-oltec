@@ -8,10 +8,26 @@
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/m68k",
       "toolchainFile": "${sourceDir}/cmake/m68k-toolchain.cmake",
-      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug", "BASE": "clean" }
+    },
+    {
+      "name": "m68k-chili-v1",
+      "inherits": "m68k",
+      "displayName": "m68k patch on planetchili's V1.0",
+      "binaryDir": "${sourceDir}/build/m68k-chili-v1",
+      "cacheVariables": { "BASE": "chili-v1" }
+    },
+    {
+      "name": "m68k-chili-v2",
+      "inherits": "m68k",
+      "displayName": "m68k patch on planetchili's V2.0",
+      "binaryDir": "${sourceDir}/build/m68k-chili-v2",
+      "cacheVariables": { "BASE": "chili-v2" }
     }
   ],
   "buildPresets": [
-    { "name": "m68k", "configurePreset": "m68k" }
+    { "name": "m68k", "configurePreset": "m68k" },
+    { "name": "m68k-chili-v1", "configurePreset": "m68k-chili-v1" },
+    { "name": "m68k-chili-v2", "configurePreset": "m68k-chili-v2" }
   ]
 }

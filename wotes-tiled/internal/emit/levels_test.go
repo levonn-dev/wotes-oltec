@@ -19,10 +19,10 @@ func TestEntranceTables(t *testing.T) {
 	got := Assembler(res, "maps/land.tmj")
 	for _, want := range []string{
 		"land_tiles, land_entrance_regions, land_entrance_points, land_area_tiles, land_area_plane, land_area_scale_x, land_area_scale_y, land_area_flag\n",
-		"\n    .balign 2\nland_entrance_regions:\n    .incbin \"clean.md\", 0x10416, 14\n    .byte   4 | entrance 14, tradeway\n    .incbin \"clean.md\", 0x10425, 25\n" +
+		"\n    .balign 2\nland_entrance_regions:\n    .incbin \"base.md\", 0x10416, 14\n    .byte   4 | entrance 14, tradeway\n    .incbin \"base.md\", 0x10425, 25\n" +
 			"    .byte   4 | entrance 40, cave_1\n    .byte   4 | entrance 41, the door\n    .byte   0xFF\n",
-		"\n    .balign 2\nland_entrance_points:\n    .incbin \"clean.md\", 0x104EC, 112\n    .short  0x0A08, 0x0920 | entrance 14, tradeway\n    .byte   0, 12, 0, 1\n" +
-			"    .incbin \"clean.md\", 0x10564, 200\n    .short  0x00C8, 0x00B8 | entrance 40, cave_1\n    .byte   2, 38, 80, 3\n" +
+		"\n    .balign 2\nland_entrance_points:\n    .incbin \"base.md\", 0x104EC, 112\n    .short  0x0A08, 0x0920 | entrance 14, tradeway\n    .byte   0, 12, 0, 1\n" +
+			"    .incbin \"base.md\", 0x10564, 200\n    .short  0x00C8, 0x00B8 | entrance 40, cave_1\n    .byte   2, 38, 80, 3\n" +
 			"    .short  0x08F8, 0x0518 | entrance 41, the door\n    .byte   0, 39, 0, 0\n    .long   0xFFFFFFFF\n",
 	} {
 		if !strings.Contains(got, want) {
@@ -39,7 +39,7 @@ func TestEntranceTablesAtTheEnds(t *testing.T) {
 	res := &convert.Result{Name: "land", Region: 1, GameEntrances: 2, EntranceAt: [2]int{0x100, 0x200},
 		Entrances: []convert.Entrance{{Name: "a", Index: 0}, {Name: "b", Index: 1}}}
 	got := Assembler(res, "maps/land.tmj")
-	if strings.Contains(got, ".incbin \"clean.md\", 0x1") || strings.Contains(got, ".incbin \"clean.md\", 0x2") {
+	if strings.Contains(got, ".incbin \"base.md\", 0x1") || strings.Contains(got, ".incbin \"base.md\", 0x2") {
 		t.Fatalf("an .incbin of no bytes:\n%s", got)
 	}
 }
@@ -61,13 +61,13 @@ func TestLevelTables(t *testing.T) {
 	got := Assembler(res, "maps/land.tmj")
 	for _, want := range []string{
 		"land_entrance_regions, land_entrance_points, land_levels, land_level_directory, land_stairs, land_area_tiles, land_area_plane, land_area_scale_x, land_area_scale_y, land_area_flag\n",
-		"\n    .balign 2\nland_levels:\n    .incbin \"clean.md\", 0x1145C, 24\n    .long   0x011624, 0x0C3EB2, land_grid_caves | level 2: caves, the cave of cave_1\n" +
+		"\n    .balign 2\nland_levels:\n    .incbin \"base.md\", 0x1145C, 24\n    .long   0x011624, 0x0C3EB2, land_grid_caves | level 2: caves, the cave of cave_1\n" +
 			"    .long   0x011624, 0x0C3EB2, land_grid_caves | level 3: caves, the cave of deep\n",
 		"\n    .balign 2\nland_level_directory:\n    .short  4\n    .long   0x0D6128 - land_level_directory\n    .long   0x0D6200 - land_level_directory\n" +
 			"    .long   land_level_2_objects - land_level_directory\n    .long   land_level_3_objects - land_level_directory\n" +
 			"    .long   0x0D5F68 - land_level_directory\n    .long   0x0D5F80 - land_level_directory\n" +
 			"    .long   land_level_2_texts - land_level_directory\n    .long   land_level_3_texts - land_level_directory\n",
-		"\n    .balign 2\nland_stairs:\n    .incbin \"clean.md\", 0x10D0A, 4\n    .short  3\n    .byte   0, 0\n",
+		"\n    .balign 2\nland_stairs:\n    .incbin \"base.md\", 0x10D0A, 4\n    .short  3\n    .byte   0, 0\n",
 		"\n    .balign 2\nland_grid_caves:\n    .byte   0x00, 0x03, 0x83, 0x01, 0x02, 0x03, 0x80\n",
 		"\nland_level_2_objects:\n    .byte   2\n    .byte   1, 3, 0 | cave_1\n    .byte   7, 3, 3 | cave_2\n" +
 			"    .byte   0x06, 0xFE, 0x01, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 | out\n    .byte   0x05, 0x01, 0x02, 0x03, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00 | a note\n    .byte   0\n" +

@@ -297,7 +297,7 @@ test_blocks:
     .short  0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000
 
 test_metatiles:
-    .incbin "clean.md", 0x703EA, 54
+    .incbin "base.md", 0x703EA, 54
     .short  0xC001, 0x4001, 0x4001, 0x4001, 0x4001, 0x4001, 0x4001, 0x4001
     .short  0x4001
     .short  0x2006, 0x2006, 0x2006, 0x2006, 0x2006, 0x2006, 0x2006, 0x2006
@@ -368,20 +368,20 @@ test_figure_colours:
 
     .balign 2
 test_entrance_regions:
-    .incbin "clean.md", 0x10416, 3
+    .incbin "base.md", 0x10416, 3
     .byte   3 | entrance 3, cave
     .byte   0xFF
 
     .balign 2
 test_entrance_points:
-    .incbin "clean.md", 0x104EC, 24
+    .incbin "base.md", 0x104EC, 24
     .short  0x0308, 0x0408 | entrance 3, cave
     .byte   0, 2, 0, 1
     .long   0xFFFFFFFF
 
     .balign 2
 test_levels:
-    .incbin "clean.md", 0x1145C, 456
+    .incbin "base.md", 0x1145C, 456
 
     .balign 2
 test_level_directory:
@@ -465,7 +465,7 @@ test_level_directory:
 
     .balign 2
 test_stairs:
-    .incbin "clean.md", 0x10D0A, 8
+    .incbin "base.md", 0x10D0A, 8
 
     .balign 2
 test_area_tiles:
