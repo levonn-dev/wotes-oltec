@@ -66,13 +66,13 @@ task build
 | Task | Does |
 |---|---|
 | `bootstrap` | BlastEm, mdrom and planetchili's two patches into `tools/`, wotes-tiled built there; checks the apt tools and the clean ROM |
-| `build` | Configures the three build trees (`build/m68k`, `build/m68k-chili-v1`, `build/m68k-chili-v2`) if needed, then in each links, runs the 68000 and hook checks, injects and writes the BPS |
+| `build` | Configures the three build trees (`build/m68k`, `build/m68k-chili-v1`, `build/m68k-chili-v2`) if needed, extracts `maps/rom/` from the clean ROM when it is missing or stale, then in each tree links, runs the 68000 and hook checks, injects and writes the BPS |
 | `run` | The patched ROM in BlastEm; `BASE=chili-v1` or `BASE=chili-v2` runs that build |
 | `check` | `build`, the wotes-tiled round trip against the clean ROM, then the scripted GDB check on each of the three ROMs |
 | `check:host` | wotes-tiled tests, shellcheck; no cross compiler or ROM needed (what CI runs) |
 | `check:target` | The on-target GDB checks alone |
 | `debug` | Interactive `gdb-multiarch` against BlastEm, paused at the reset vector; `BASE` as for `run` |
-| `tiled:extract` | Every outdoor tile set and map and every dungeon level of the clean ROM into `maps/rom/` as Tiled files |
+| `tiled:extract` | Every outdoor tile set and map and every dungeon level of the clean ROM into `maps/rom/` as Tiled files; `build` runs it when needed, since the land map paints with those tilesets |
 | `tiled:render -- ARGS` | A map or a ROM region to PNG |
 | `tiled:install` | Tiled 1.12 into `tools/tiled/` (optional) |
 | `tiled -- FILE` | Opens the Tiled project, or a map, in that Tiled |

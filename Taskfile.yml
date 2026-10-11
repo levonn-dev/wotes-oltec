@@ -33,9 +33,10 @@ tasks:
         cmd: cmake --preset {{.ITEM}} {{.CLI_ARGS}}
 
   build:
-    desc: 'Build the patch for each base: link, 68000 scan, hook check, inject, then oltec.bps, oltec-chili-v1.bps and oltec-chili-v2.bps'
+    desc: 'Build the patch for each base: extract maps/rom if missing or stale, link, 68000 scan, hook check, inject, then oltec.bps, oltec-chili-v1.bps and oltec-chili-v2.bps'
     cmds:
       - task: configure
+      - task: tiled:extract
       - for: { var: PRESETS }
         cmd: cmake --build --preset {{.ITEM}}
 
@@ -98,7 +99,14 @@ tasks:
       - go test -run 'TestRoundTrip|TestDungeonsReal|TestRunIsDeterministicReal|TestSpeechRoundTripReal|TestCityFiguresReal|TestAreaPictureReal' ./internal/convert/ ./internal/rom/ ./internal/extract/ ./internal/dungeon/
 
   tiled:extract:
-    desc: Extract every outdoor tile set and map and every dungeon level of the clean ROM into maps/rom
+    desc: Extract every outdoor tile set and map and every dungeon level of the clean ROM into maps/rom (build runs it when maps/rom is missing or the ROM or the tool changed)
+    # The land map paints with the extracted tilesets, so build needs maps/rom before it converts the map.
+    sources:
+      - build/m68k/base.md
+      - wotes-tiled/go.mod
+      - wotes-tiled/**/*.go
+    generates:
+      - maps/rom/**/*
     cmds:
       - task: configure
       - task: tiled:build
