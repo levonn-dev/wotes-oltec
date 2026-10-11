@@ -1,0 +1,63 @@
+# A pushed v* tag builds the three BPS patches and attaches them to a GitHub release.
+# Run from the Actions tab instead, it builds and checks without publishing.
+name: release
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    # The Ubuntu the README names, so the cross compiler is the one a local build uses.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: arduino/setup-task@c0bc642852239c2689f73f4ea6459c29405f3c52 # v3.0.0
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: wotes-tiled/go.mod
+          cache: false
+      - name: Install the cross compiler and helpers
+        # libgl1: the BlastEm nightly links libGL even with gl off.
+        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build gcc gcc-m68k-linux-gnu gdb-multiarch binutils shellcheck curl unzip libgl1
+      - name: Bootstrap
+        run: task bootstrap
+      - name: Fetch the clean ROM
+        # The ROM is never in the repository: the job downloads it from the ROM_URL secret and checks it.
+        env:
+          ROM_URL: ${{ secrets.ROM_URL }}
+        run: |
+          test -n "$ROM_URL" || { echo 'the ROM_URL repository secret is not set' >&2; exit 1; }
+          curl -fsSL --retry 5 --retry-all-errors -o "$RUNNER_TEMP/base.md" "$ROM_URL"
+          echo "9135f7fda03ef7da92dfade9c0df75808214f693  $RUNNER_TEMP/base.md" | sha1sum -c --quiet
+      - name: Build
+        run: |
+          task configure -- -DCLEAN_ROM="$RUNNER_TEMP/base.md"
+          task build
+      - name: Check
+        # BlastEm boots headless for the on-target check.
+        env:
+          SDL_VIDEODRIVER: dummy
+          SDL_AUDIODRIVER: dummy
+          SDL_RENDER_DRIVER: software
+        run: task check
+      - name: Collect the patches
+        run: |
+          mkdir "$RUNNER_TEMP/release"
+          cp build/m68k/oltec.bps build/m68k-chili-v1/oltec-chili-v1.bps build/m68k-chili-v2/oltec-chili-v2.bps "$RUNNER_TEMP/release"
+          cd "$RUNNER_TEMP/release" && sha1sum -- *.bps | tee sha1sums.txt
+      - name: Publish
+        if: startsWith(github.ref, 'refs/tags/')
+        # checkout leaves the tag pointing at its commit; the fetch restores the annotated tag whose message is the notes.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
+          gh release create "$GITHUB_REF_NAME" --verify-tag --notes-from-tag "$RUNNER_TEMP"/release/*
