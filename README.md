@@ -2,6 +2,10 @@
 
 A patch for Dungeons & Dragons: Warriors of the Eternal Sun on the Sega Genesis and Mega Drive. It gives the game a fourth outdoor region, the Oltec Hills, true to the Hollow World book: the Oltec Tradeway dungeon no longer ends at its foot but opens on the hills, with places and people of their own, caves and a dungeon behind them, a map screen, and the meeting with the Oltec merchant moved there from the dungeon's foot.
 
+<img src="docs/screenshots/landing-2x.png" width="320" alt="The party on the grass below the Tradeway's mouth, in the Oltec Hills"> <img src="docs/screenshots/village-2x.png" width="320" alt="The village square, its fire and its people"><br>
+<img src="docs/screenshots/elder-2x.png" width="320" alt="The village elder greets the party"> <img src="docs/screenshots/cave-mouth-2x.png" width="320" alt="A cave mouth in a hillside"><br>
+<img src="docs/screenshots/cave-2x.png" width="320" alt="Two cave bears attack inside the caves">
+
 ## Playing it
 
 1. Get the patch from the [releases](https://github.com/levonn-dev/wotes-oltec/releases): `oltec.bps` for the original game, `oltec-chili-v1.bps` or `oltec-chili-v2.bps` for a ROM that already carries V1.0 or V2.0 of [planetchili's patch](https://github.com/planetchili/wotes_patch), which fixes the game's logic bugs and rebalances its classes. `sha1sums.txt` lists the three files' SHA-1 sums.
@@ -95,7 +99,7 @@ A pushed `v*` tag runs `.github/workflows/release.yml` on a GitHub runner: boots
 - `wotes-tiled/`: the Go tool that moves outdoor maps and dungeon levels between the ROM and Tiled (`docs/tiled.md`)
 - `maps/`: the land map, the caves and dungeon map, the metatile definitions, the new tiles, the area-map picture and the Tiled project file; `maps/rom/` and `maps/gen/` are generated and not committed
 - `scripts/`: bootstrap, the Tiled installer, the BlastEm and GDB launchers, and the build-time and on-target checks
-- `docs/`: `debugging.md` for GDB and IDEA, `tiled.md` for drawing maps
+- `docs/`: `debugging.md` for GDB and IDEA, `tiled.md` for drawing maps, `screenshots/` the pictures above at the game's 320×224 and doubled
 - `tools/`: created by bootstrap, not committed
 - `.github/`: the CI workflow, which runs `task check:host`, the release workflow, and `CODEOWNERS`
 
